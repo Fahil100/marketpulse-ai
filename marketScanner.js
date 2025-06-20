@@ -1,110 +1,91 @@
 const axios = require('axios');
 const sendTelegramAlert = require('./sendTelegramAlert');
 
-const TWELVE_DATA_API_KEY = process.env.TWELVE_DATA_API_KEY;
 const FINNHUB_API_KEY = process.env.FINNHUB_API_KEY;
+const TWELVE_DATA_API_KEY = process.env.TWELVE_DATA_API_KEY;
 
-// Tickers to monitor
 const STOCKS = ['AAPL', 'TSLA', 'NVDA'];
-const CRYPTOS = ['BINANCE:BTCUSDT', 'BINANCE:ETHUSDT'];
+const CRYPTOS = ['COINBASE:BTC-USD', 'COINBASE:ETH-USD'];
 const GOLD_SYMBOL = 'XAU/USD';
 
-// === GOLD ===
 async function scanGold() {
   try {
-    const url = `https://api.twelvedata.com/quote?symbol=${GOLD_SYMBOL}&apikey=${TWELVE_DATA_API_KEY}`;
+    const url = `https://api.twelvedata.com/quote?symbol=${encodeURIComponent(GOLD_SYMBOL)}&apikey=${TWELVE_DATA_API_KEY}`;
     const response = await axios.get(url);
     const data = response.data;
 
-    if (!data || !data.close || !data.previous_close) return;
-
-    const current = parseFloat(data.close);
-    const prev = parseFloat(data.previous_close);
-    const pct = ((current - prev) / prev) * 100;
-
-    if (Math.abs(pct) >= 0.5) {
-      const dir = pct > 0 ? 'UP' : 'DOWN';
-      await sendTelegramAlert(`
-🚨 GOLD ALERT
-
-Symbol: ${GOLD_SYMBOL}
-Direction: ${dir}
-Price: $${current.toFixed(2)} (${pct.toFixed(2)}%)
-⏱ ${new Date().toLocaleTimeString()}
-${dir === 'UP' ? '🟢 Possible long entry' : '🔴 Possible short or rebound'}
-      `);
-      console.log("✅ Gold alert sent.");
+    if (!data || !data.close || !data.previous_close) {
+      console.error('Invalid gold data:', data);
+      return;
     }
-  } catch (err) {
-    console.error("Gold scan error:", err.message);
+
+    const price = parseFloat(data.close);
+    const prevClose = parseFloat(data.previous_close);
+    const change = price - prevClose;
+    const percentChange = (change / prevClose) * 100;
+
+    const direction = change > 0 ? 'UP' : 'DOWN';
+    const action = change < -0.5 ? '🔴 Possible short or rebound' : change > 0.5 ? '🟢 Momentum building' : '🟡 Watch closely';
+
+    const alertMsg = `🚨 GOLD ALERT\n\nSymbol: ${GOLD_SYMBOL}\nDirection: ${direction}\nPrice: $${price.toFixed(2)} (${percentChange.toFixed(2)}%)\n⏱ ${new Date().toLocaleTimeString()}\n${action}`;
+    await sendTelegramAlert(alertMsg);
+    console.log('✅ Gold alert sent.');
+  } catch (error) {
+    console.error('Error fetching gold data:', error.response?.data || error.message);
   }
 }
 
-// === STOCKS ===
 async function scanStocks() {
-  for (const ticker of STOCKS) {
+  for (const symbol of STOCKS) {
     try {
-      const res = await axios.get(`https://finnhub.io/api/v1/quote?symbol=${ticker}&token=${FINNHUB_API_KEY}`);
+      const url = `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${FINNHUB_API_KEY}`;
+      const res = await axios.get(url);
       const d = res.data;
-      if (!d.c || !d.pc) continue;
 
-      const pct = ((d.c - d.pc) / d.pc) * 100;
-      if (Math.abs(pct) >= 2.5) {
-        const dir = pct > 0 ? 'UP' : 'DOWN';
-        await sendTelegramAlert(`
-📈 STOCK ALERT
+      const change = d.c - d.pc;
+      const percent = (change / d.pc) * 100;
 
-Ticker: $${ticker}
-Change: ${pct.toFixed(2)}%
-Price: $${d.c.toFixed(2)}
-⏱ ${new Date().toLocaleTimeString()}
-${dir === 'UP' ? '🟢 Momentum BUY zone' : '🔻 Dip or short opportunity'}
-        `);
-        console.log(`✅ Stock alert for ${ticker} sent.`);
+      if (Math.abs(percent) >= 5) {
+        const direction = percent > 0 ? '📈 UP' : '📉 DOWN';
+        const message = `🚨 STOCK ALERT\n\nTicker: ${symbol}\nDirection: ${direction}\nCurrent: $${d.c.toFixed(2)}\nChange: ${percent.toFixed(2)}%\n⏱ ${new Date().toLocaleTimeString()}\n💡 Triggered 5%+ movement`;
+        await sendTelegramAlert(message);
+        console.log(`✅ Stock alert sent: ${symbol}`);
       }
     } catch (err) {
-      console.error(`Stock error (${ticker}):`, err.message);
+      console.error(`Stock error (${symbol}):`, err.response?.data || err.message);
     }
   }
 }
 
-// === CRYPTO ===
 async function scanCrypto() {
   for (const symbol of CRYPTOS) {
     try {
-      const res = await axios.get(`https://finnhub.io/api/v1/crypto/candle?symbol=${symbol}&resolution=1&count=2&token=${FINNHUB_API_KEY}`);
-      const data = res.data;
-      if (!data || !data.c || data.c.length < 2) continue;
+      const url = `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${FINNHUB_API_KEY}`;
+      const res = await axios.get(url);
+      const d = res.data;
 
-      const prev = data.c[data.c.length - 2];
-      const curr = data.c[data.c.length - 1];
-      const pct = ((curr - prev) / prev) * 100;
+      const change = d.c - d.pc;
+      const percent = (change / d.pc) * 100;
 
-      if (Math.abs(pct) >= 1.5) {
-        const dir = pct > 0 ? 'UP' : 'DOWN';
-        await sendTelegramAlert(`
-💰 CRYPTO ALERT
-
-Pair: ${symbol}
-Change: ${pct.toFixed(2)}%
-Price: $${curr.toFixed(2)}
-⏱ ${new Date().toLocaleTimeString()}
-${dir === 'UP' ? '🟢 Bullish momentum' : '🔻 Bearish move or dip buy?'}
-        `);
-        console.log(`✅ Crypto alert for ${symbol} sent.`);
+      if (Math.abs(percent) >= 3) {
+        const direction = percent > 0 ? '📈 UP' : '📉 DOWN';
+        const message = `🚨 CRYPTO ALERT\n\nPair: ${symbol}\nDirection: ${direction}\nPrice: $${d.c.toFixed(2)}\nChange: ${percent.toFixed(2)}%\n⏱ ${new Date().toLocaleTimeString()}\n⚠️ 3%+ movement detected`;
+        await sendTelegramAlert(message);
+        console.log(`✅ Crypto alert sent: ${symbol}`);
       }
     } catch (err) {
-      console.error(`Crypto error (${symbol}):`, err.message);
+      console.error(`Crypto error (${symbol}):`, err.response?.data || err.message);
     }
   }
 }
 
-// === RUN ALL ===
-async function runScanner() {
+async function marketScanner() {
   await scanGold();
   await scanStocks();
   await scanCrypto();
 }
 
-runScanner();
-setInterval(runScanner, 30000);
+setInterval(marketScanner, 30000); // every 30 seconds
+marketScanner();
+
+module.exports = marketScanner;
