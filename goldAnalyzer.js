@@ -25,7 +25,7 @@ async function goldAnalyzer() {
   try {
     const { current, previous, changePercent } = await getGoldData();
 
-    if (Math.abs(changePercent) >= 5) {
+    if (true) {
       const direction = changePercent > 0 ? "📈 Bullish" : "📉 Bearish";
       const message = `🚨 Gold Alert (${direction})\nCurrent: $${current}\nPrevious Close: $${previous}\nChange: ${changePercent.toFixed(2)}%`;
       await sendTelegramAlert(message);
