@@ -1,37 +1,20 @@
 const axios = require("axios");
 
-async function getGoldData() {
-  const apiKey = process.env.TWELVE_DATA_KEY;
-  const url = `https://api.twelvedata.com/quote?symbol=XAU/USD&apikey=${apiKey}`;
-  const response = await axios.get(url);
-  const data = response.data;
-
-  const current = parseFloat(data.price);
-  const previous = parseFloat(data.previous_close);
-  const changePercent = ((current - previous) / previous) * 100;
-
-  return { current, previous, changePercent };
-}
-
-async function sendTelegramAlert(message) {
-  const botToken = process.env.TELEGRAM_BOT_TOKEN;
-  const chatId = process.env.TELEGRAM_CHANNEL_ID;
-  const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
-
-  await axios.post(url, { chat_id: chatId, text: message });
-}
-
 async function goldAnalyzer() {
   try {
-    const { current, previous, changePercent } = await getGoldData();
+    const message = `🚨 Test Alert: This is a direct message from your MarketPulse-AI bot.`;
+    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    const chatId = process.env.TELEGRAM_CHANNEL_ID;
+    const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
 
-    if (true) {
-      const direction = changePercent > 0 ? "📈 Bullish" : "📉 Bearish";
-      const message = `🚨 Gold Alert (${direction})\nCurrent: $${current}\nPrevious Close: $${previous}\nChange: ${changePercent.toFixed(2)}%`;
-      await sendTelegramAlert(message);
-    }
+    await axios.post(url, {
+      chat_id: chatId,
+      text: message,
+    });
+
+    console.log("Message sent!");
   } catch (err) {
-    console.error("Error in goldAnalyzer:", err.response?.data || err.message);
+    console.error("Telegram error:", err.response?.data || err.message);
   }
 }
 
