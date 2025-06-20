@@ -1,12 +1,13 @@
 const axios = require("axios");
 
 async function getGoldData() {
-  const url = "https://query1.finance.yahoo.com/v7/finance/quote?symbols=GC=F";
+  const apiKey = process.env.TWELVE_DATA_KEY;
+  const url = `https://api.twelvedata.com/quote?symbol=XAU/USD&apikey=${apiKey}`;
   const response = await axios.get(url);
-  const data = response.data.quoteResponse.result[0];
+  const data = response.data;
 
-  const current = data.regularMarketPrice;
-  const previous = data.regularMarketPreviousClose;
+  const current = parseFloat(data.price);
+  const previous = parseFloat(data.previous_close);
   const changePercent = ((current - previous) / previous) * 100;
 
   return { current, previous, changePercent };
