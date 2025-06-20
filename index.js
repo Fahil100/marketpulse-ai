@@ -1,3 +1,5 @@
+// index.js
+
 const express = require('express');
 const sendTelegramAlert = require('./sendTelegramAlert');
 require('./marketScanner'); // This runs the market scanner automatically
