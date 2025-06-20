@@ -1,65 +1,81 @@
-// ✅ FINAL STEP: Connect Alpha Vantage + Telegram Alert
-
 const express = require('express');
 const axios = require('axios');
-require('dotenv').config();
+const dotenv = require('dotenv');
+
+dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-const ALPHA_VANTAGE_API_KEY = process.env.ALPHA_VANTAGE_API_KEY;
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+const PORT = process.env.PORT || 10000;
 
-const GOLD_SYMBOL = 'XAUUSD';
-const ALERT_THRESHOLD = 2000; // ✅ You can change this value to test alerts
+// Store last known gold price
+let lastGoldPrice = 0;
 
+// Function to send message to Telegram
+async function sendTelegramMessage(message) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+
+  const url = `https://api.telegram.org/bot${token}/sendMessage`;
+  try {
+    await axios.post(url, {
+      chat_id: chatId,
+      text: message,
+    });
+    console.log('📬 Telegram alert sent.');
+  } catch (err) {
+    console.error('❌ Failed to send Telegram message:', err.message);
+  }
+}
+
+// Function to fetch and compare gold price
 async function checkGoldPrice() {
   try {
-    const response = await axios.get(`https://www.alphavantage.co/query`, {
-      params: {
-        function: 'CURRENCY_EXCHANGE_RATE',
-        from_currency: 'XAU',
-        to_currency: 'USD',
-        apikey: ALPHA_VANTAGE_API_KEY,
-      },
-    });
-
-    const price = parseFloat(
-      response.data['Realtime Currency Exchange Rate']['5. Exchange Rate']
+    const response = await axios.get(
+      `https://www.alphavantage.co/query?function=CURRENCY_EXCHANGE_RATE&from_currency=XAU&to_currency=USD&apikey=${process.env.ALPHA_VANTAGE_API_KEY}`
     );
 
-    console.log(`Gold price: $${price}`);
+    const data = response.data;
 
-    if (price > ALERT_THRESHOLD) {
-      await sendTelegramAlert(price);
+    if (
+      data &&
+      data['Realtime Currency Exchange Rate'] &&
+      data['Realtime Currency Exchange Rate']['5. Exchange Rate']
+    ) {
+      const price = parseFloat(
+        data['Realtime Currency Exchange Rate']['5. Exchange Rate']
+      );
+
+      console.log(`🟡 Gold Price (XAU to USD): $${price}`);
+
+      // Compare with previous price
+      if (lastGoldPrice > 0) {
+        const changePercent = Math.abs(
+          ((price - lastGoldPrice) / lastGoldPrice) * 100
+        );
+
+        if (changePercent >= 5) {
+          await sendTelegramMessage(
+            `🟡 Gold moved ${changePercent.toFixed(2)}% → New Price: $${price}`
+          );
+        }
+      }
+
+      lastGoldPrice = price;
+    } else {
+      console.error('❌ Unexpected API response:', data);
     }
-  } catch (error) {
-    console.error('Error checking gold price:', error.message);
+  } catch (err) {
+    console.error('❌ Error checking gold price:', err.message);
   }
 }
 
-async function sendTelegramAlert(price) {
-  const message = `\uD83D\uDEA8 GOLD PRICE ALERT: $${price}`;
-  const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
-  const body = {
-    chat_id: TELEGRAM_CHAT_ID,
-    text: message,
-  };
-
-  try {
-    await axios.post(url, body);
-    console.log('Telegram alert sent.');
-  } catch (error) {
-    console.error('Telegram alert failed:', error.message);
-  }
-}
-
-// Schedule checks every 60 seconds
-setInterval(checkGoldPrice, 60000);
-
+// Endpoint for test
 app.get('/', (req, res) => {
   res.send('✅ GPT MarketPulse-AI server is running.');
 });
+
+// Start checking gold every 60 seconds
+setInterval(checkGoldPrice, 60000);
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
