@@ -1,13 +1,26 @@
-const express = require("express");
-require("dotenv").config();
-const goldAnalyzer = require("./goldAnalyzer");
+const express = require('express');
+const sendTelegramAlert = require('./sendTelegramAlert');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const port = process.env.PORT || 10000;
 
-app.get("/", async (req, res) => {
-  await goldAnalyzer();
-  res.send("✅ Gold Analyzer executed.");
+// Root route for testing Telegram
+app.get('/', async (req, res) => {
+  const testMessage = `
+🚨 TEST ALERT: Telegram is working perfectly.
+This is just a test to confirm the system is live and alerts are flowing. ✅
+  `;
+
+  try {
+    await sendTelegramAlert(testMessage);
+    res.send('✅ Telegram test alert sent.');
+  } catch (error) {
+    console.error('❌ Error sending alert:', error.message);
+    res.status(500).send('❌ Failed to send Telegram alert.');
+  }
 });
 
-app.listen(PORT, () => console.log(`MarketPulse-AI server running on port ${PORT}`));
+// Start the server
+app.listen(port, () => {
+  console.log(`🚀 MarketPulse-AI server running on port ${port}`);
+});
