@@ -1,18 +1,56 @@
-// index.js
-
 const express = require('express');
-const sendTelegramAlert = require('./sendTelegramAlert');
-require('./marketScanner'); // This runs the market scanner automatically
+const goldAnalyzer = require('./goldanalyzer');
+const marketScanner = require('./marketscanner');
+const sendTelegramAlert = require('./sendtelegramalert');
 
 const app = express();
-const port = process.env.PORT || 10000;
+const PORT = process.env.PORT || 3000;
 
-// Root endpoint for health check
+// Root route for health check
 app.get('/', (req, res) => {
-  res.send('✅ MarketPulse-AI server is live and scanning every 30 seconds.');
+  res.send('✅ MarketPulse-AI server is live and running.');
 });
 
-// Start the server
-app.listen(port, () => {
-  console.log(`🚀 MarketPulse-AI server running on port ${port}`);
+// /scan route to analyze markets and send alerts
+app.get('/scan', async (req, res) => {
+  try {
+    const goldResult = await goldAnalyzer();
+    const stockResults = await marketScanner();
+
+    const alerts = [];
+
+    if (goldResult && goldResult.signal === 'buy') {
+      alerts.push(`🟡 Gold Alert: ${goldResult.message}`);
+    }
+
+    if (stockResults && Array.isArray(stockResults)) {
+      stockResults.forEach(stock => {
+        if (stock.signal === 'buy' || stock.signal === 'sell') {
+          alerts.push(`📈 ${stock.ticker} Alert: ${stock.message}`);
+        }
+      });
+    }
+
+    // Send alerts to Telegram
+    for (const alert of alerts) {
+      await sendTelegramAlert(alert);
+    }
+
+    res.status(200).json({
+      status: 'success',
+      alertsSent: alerts.length,
+      details: alerts,
+    });
+  } catch (error) {
+    console.error('Scan error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Scan failed',
+      error: error.message,
+    });
+  }
+});
+
+app.listen(PORT, () => {
+  console.log(`✅ Server is running on port ${PORT}`);
 });
