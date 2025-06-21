@@ -1,59 +1,43 @@
 const axios = require('axios');
+const sendTelegramAlert = require('./sendTelegramAlert');
+
+const TWELVE_DATA_API_KEY = process.env.TWELVE_DATA_API_KEY;
+const GOLD_SYMBOL = 'XAU/USD';
 
 async function fetchGoldPrice() {
-  const url = 'https://query1.finance.yahoo.com/v8/finance/chart/GC=F';
   try {
-    const response = await axios.get(url, {
-      params: {
-        region: 'US',
-        lang: 'en-US',
-        includePrePost: false,
-        interval: '1m',
-        range: '1d',
-      },
-    });
+    const url = `https://api.twelvedata.com/price?symbol=${encodeURIComponent(GOLD_SYMBOL)}&apikey=${TWELVE_DATA_API_KEY}`;
+    const response = await axios.get(url);
 
-    const result = response.data.chart.result[0];
-    const meta = result.meta;
-    const currentPrice = meta.regularMarketPrice;
-    const previousClose = meta.chartPreviousClose;
-
-    return { currentPrice, previousClose };
+    if (response.data && response.data.price) {
+      return parseFloat(response.data.price);
+    } else {
+      console.warn('No price data returned for gold:', response.data);
+      return null;
+    }
   } catch (error) {
-    console.error('❌ Error fetching gold price:', error.message);
+    console.error('Error fetching gold price:', error.message);
     return null;
   }
 }
 
-function analyzeGold({ currentPrice, previousClose }) {
-  const priceChangePercent = ((currentPrice - previousClose) / previousClose) * 100;
+async function scanMarket() {
+  console.log('📡 Scanning gold market...');
 
-  if (priceChangePercent >= 0.5) {
-    return {
-      type: 'BUY',
-      message: `📈 GOLD BUY SIGNAL\nCurrent Price: $${currentPrice.toFixed(2)}\nChange: +${priceChangePercent.toFixed(2)}%`,
-    };
+  const price = await fetchGoldPrice();
+  if (!price) {
+    console.log('⚠️ Skipping alert: No price received.');
+    return;
   }
 
-  if (priceChangePercent <= -0.5) {
-    return {
-      type: 'SELL',
-      message: `📉 GOLD SELL SIGNAL\nCurrent Price: $${currentPrice.toFixed(2)}\nChange: ${priceChangePercent.toFixed(2)}%`,
-    };
+  // LIVE TRADING SIGNAL: Very basic logic, expand as needed
+  if (price > 3400) {
+    await sendTelegramAlert(`📈 GOLD BUY SIGNAL\nCurrent Price: $${price.toFixed(2)}\nConditions met. Consider buying.`);
+  } else if (price < 3350) {
+    await sendTelegramAlert(`📉 GOLD SELL SIGNAL\nCurrent Price: $${price.toFixed(2)}\nConditions met. Consider selling.`);
+  } else {
+    console.log('ℹ️ No opportunities found at this time.');
   }
-
-  return null;
 }
 
-module.exports = async function marketScanner() {
-  const priceData = await fetchGoldPrice();
-  if (!priceData) return [];
-
-  const signal = analyzeGold(priceData);
-  if (signal) {
-    return [signal.message];
-  }
-
-  console.log('ℹ️ No opportunities found at this time.');
-  return [];
-};
+scanMarket();
