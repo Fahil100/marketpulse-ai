@@ -12,16 +12,33 @@ app.get('/', (req, res) => {
 
 app.get('/scan', async (req, res) => {
   try {
-    const opportunities = await marketScanner();
+    const goldResult = await goldAnalyzer();
+    const stockResults = await marketScanner();
+    const opportunities = [];
+
+    if (goldResult?.signal === 'buy') {
+      opportunities.push({ type: 'gold', message: goldResult.message });
+    }
+
+    if (Array.isArray(stockResults)) {
+      stockResults.forEach(stock => {
+        if (stock.signal === 'buy' || stock.signal === 'sell') {
+          opportunities.push({
+            type: 'stock',
+            ticker: stock.ticker,
+            message: stock.message,
+          });
+        }
+      });
+    }
 
     if (opportunities.length > 0) {
       await sendTelegramAlert(opportunities);
-      res.json({ message: 'Scan complete. Alerts sent.', data: opportunities });
-    } else {
-      res.json({ message: 'Scan complete. No opportunities found.' });
+      return res.json({ message: 'Scan complete. Alerts sent.', data: opportunities });
     }
+
+    res.json({ message: 'Scan complete. No opportunities found.' });
   } catch (error) {
-    console.error('Scan error:', error);
     res.status(500).json({ message: 'Scan failed.', error: error.message });
   }
 });
