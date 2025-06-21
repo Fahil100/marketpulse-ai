@@ -1,5 +1,5 @@
 const express = require('express');
-const goldAnalyzer = require('./goldAnalyzer');
+const goldAnalyzer = require('./goldAnalyzer_TEMP');
 const marketScanner = require('./marketscanner');
 const sendTelegramAlert = require('./sendtelegramalert');
 
