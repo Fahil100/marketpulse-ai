@@ -1,30 +1,30 @@
 const axios = require('axios');
 
-// ✅ Replace with your real bot token and channel ID
-const TELEGRAM_TOKEN = '7697144054:AAE-LA8yLnEUUpAVML-8g-mL1NAQBIPKZuU';
-const CHAT_ID = '-1002890614666'; // Your Telegram channel ID
+const botToken = '7697144054:AAE-LA8yLnEUUpAVML-8g-mL1NAQBIPKZuU';
+const chatId = '-1002890614666'; // MUST include the dash and be your channel's full ID
 
 async function sendTelegramAlert(opportunities) {
-  if (!opportunities || opportunities.length === 0) return;
-
-  const message = opportunities.map(op => {
-    if (op.type === 'gold') {
-      return `📈 GOLD ALERT:\n${op.message}`;
-    } else if (op.type === 'stock') {
-      return `📊 STOCK ALERT for ${op.ticker}:\n${op.message}`;
-    }
-    return '';
-  }).join('\n\n');
-
   try {
-    await axios.post(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`, {
-      chat_id: CHAT_ID,
-      text: message,
-      parse_mode: 'Markdown',
+    const messages = opportunities.map((op, index) => {
+      return `📈 *Opportunity ${index + 1}*\n` +
+             `Symbol: ${op.symbol}\n` +
+             `Price: $${op.price}\n` +
+             `Change: ${op.changePercent}%\n` +
+             `Volume: ${op.volume}\n` +
+             `\n🕵️‍♂️ Analysis: ${op.analysis || 'N/A'}`;
     });
-    console.log('✅ Telegram alert sent!');
-  } catch (err) {
-    console.error('❌ Telegram alert failed:', err.message);
+
+    for (const msg of messages) {
+      await axios.post(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        chat_id: chatId,
+        text: msg,
+        parse_mode: 'Markdown'
+      });
+    }
+
+    console.log('✅ Alerts sent successfully to Telegram.');
+  } catch (error) {
+    console.error('❌ Failed to send alert:', error.response?.data || error.message);
   }
 }
 
