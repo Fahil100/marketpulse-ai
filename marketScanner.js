@@ -1,79 +1,32 @@
 const axios = require('axios');
-const sendTelegramAlert = require('./sendTelegramAlert');
+const goldAnalyzer = require('./goldAnalyzer');
 
-const TWELVE_DATA_API_KEY = process.env.TWELVE_DATA_API_KEY;
-const FINNHUB_API_KEY = process.env.FINNHUB_API_KEY;
+const TEST_MODE = true; // 🔁 Set to false to re-enable real scanning logic
 
-let lastAlerts = {};
-
-async function marketScanner() {
-  try {
-    // === GOLD SCANNER ===
-    const goldUrl = `https://api.twelvedata.com/quote?symbol=XAU/USD&apikey=${TWELVE_DATA_API_KEY}`;
-    const goldResponse = await axios.get(goldUrl);
-    const gold = goldResponse.data;
-
-    const goldPrice = parseFloat(gold.close);
-    const goldPrev = parseFloat(gold.previous_close);
-    const goldChange = ((goldPrice - goldPrev) / goldPrev) * 100;
-
-    if (Math.abs(goldChange) >= 0.5 && lastAlerts['GOLD'] !== goldPrice) {
-      await sendTelegramAlert(
-        `🚨 GOLD ALERT\n\nSymbol: XAU/USD\nDirection: ${goldChange > 0 ? 'UP' : 'DOWN'}\nPrice: $${goldPrice.toFixed(2)} (${goldChange.toFixed(2)}%)\n\u23f1 ${new Date().toLocaleTimeString()}\n${goldChange > 0 ? '\ud83d\udd35 Possible breakout' : '\ud83d\udd34 Possible short or rebound'}`
-      );
-      lastAlerts['GOLD'] = goldPrice;
-    }
-  } catch (error) {
-    console.error('Error fetching gold data:', error.response?.data || error.message);
-  }
-
-  try {
-    // === STOCK SCANNER ===
-    for (const symbol of ['AAPL', 'TSLA', 'NVDA']) {
-      const stockUrl = `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${FINNHUB_API_KEY}`;
-      const response = await axios.get(stockUrl);
-
-      const current = response.data.c;
-      const prev = response.data.pc;
-
-      if (!current || !prev) continue;
-
-      const percentChange = ((current - prev) / prev) * 100;
-
-      if (Math.abs(percentChange) >= 5 && lastAlerts[symbol] !== current) {
-        await sendTelegramAlert(
-          `🚨 STOCK ALERT\n\nSymbol: ${symbol}\nChange: ${percentChange.toFixed(2)}%\nPrice: $${current}\n\u23f1 ${new Date().toLocaleTimeString()}`
-        );
-        lastAlerts[symbol] = current;
+module.exports = async function marketScanner() {
+  if (TEST_MODE) {
+    // ✅ This block sends a fake alert to test Telegram + Render connection
+    return [
+      {
+        symbol: 'XAUUSD',
+        price: 2350,
+        signal: 'BUY',
+        reason: 'Test opportunity for automation system validation.'
       }
-    }
-  } catch (error) {
-    console.error(`Stock scanner error:`, error.message);
+    ];
   }
 
+  // 🧠 This is your actual scanning logic
   try {
-    // === CRYPTO SCANNER ===
-    for (const symbol of ['BINANCE:BTCUSDT', 'BINANCE:ETHUSDT']) {
-      const cryptoUrl = `https://finnhub.io/api/v1/crypto/quote?symbol=${symbol}&token=${FINNHUB_API_KEY}`;
-      const response = await axios.get(cryptoUrl);
+    const goldData = await goldAnalyzer();
 
-      const current = response.data.c;
-      const prev = response.data.pc;
-
-      if (!current || !prev) continue;
-
-      const percentChange = ((current - prev) / prev) * 100;
-
-      if (Math.abs(percentChange) >= 5 && lastAlerts[symbol] !== current) {
-        await sendTelegramAlert(
-          `₿ CRYPTO ALERT\n\nSymbol: ${symbol}\nChange: ${percentChange.toFixed(2)}%\nPrice: $${current}`
-        );
-        lastAlerts[symbol] = current;
-      }
+    if (goldData && goldData.length > 0) {
+      return goldData; // Pass real gold opportunities
     }
-  } catch (error) {
-    console.error(`Crypto scanner error:`, error.message);
-  }
-}
 
-module.exports = marketScanner;
+    return []; // No real opportunities
+  } catch (err) {
+    console.error('Market scan error:', err.message);
+    return [];
+  }
+};
