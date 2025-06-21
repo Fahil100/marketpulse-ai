@@ -1,32 +1,59 @@
 const axios = require('axios');
-const goldAnalyzer = require('./goldAnalyzer');
 
-const TEST_MODE = true; // 🔁 Set to false to re-enable real scanning logic
+async function fetchGoldPrice() {
+  const url = 'https://query1.finance.yahoo.com/v8/finance/chart/GC=F';
+  try {
+    const response = await axios.get(url, {
+      params: {
+        region: 'US',
+        lang: 'en-US',
+        includePrePost: false,
+        interval: '1m',
+        range: '1d',
+      },
+    });
+
+    const result = response.data.chart.result[0];
+    const meta = result.meta;
+    const currentPrice = meta.regularMarketPrice;
+    const previousClose = meta.chartPreviousClose;
+
+    return { currentPrice, previousClose };
+  } catch (error) {
+    console.error('❌ Error fetching gold price:', error.message);
+    return null;
+  }
+}
+
+function analyzeGold({ currentPrice, previousClose }) {
+  const priceChangePercent = ((currentPrice - previousClose) / previousClose) * 100;
+
+  if (priceChangePercent >= 0.5) {
+    return {
+      type: 'BUY',
+      message: `📈 GOLD BUY SIGNAL\nCurrent Price: $${currentPrice.toFixed(2)}\nChange: +${priceChangePercent.toFixed(2)}%`,
+    };
+  }
+
+  if (priceChangePercent <= -0.5) {
+    return {
+      type: 'SELL',
+      message: `📉 GOLD SELL SIGNAL\nCurrent Price: $${currentPrice.toFixed(2)}\nChange: ${priceChangePercent.toFixed(2)}%`,
+    };
+  }
+
+  return null;
+}
 
 module.exports = async function marketScanner() {
-  if (TEST_MODE) {
-    // ✅ This block sends a fake alert to test Telegram + Render connection
-    return [
-      {
-        symbol: 'XAUUSD',
-        price: 2350,
-        signal: 'BUY',
-        reason: 'Test opportunity for automation system validation.'
-      }
-    ];
+  const priceData = await fetchGoldPrice();
+  if (!priceData) return [];
+
+  const signal = analyzeGold(priceData);
+  if (signal) {
+    return [signal.message];
   }
 
-  // 🧠 This is your actual scanning logic
-  try {
-    const goldData = await goldAnalyzer();
-
-    if (goldData && goldData.length > 0) {
-      return goldData; // Pass real gold opportunities
-    }
-
-    return []; // No real opportunities
-  } catch (err) {
-    console.error('Market scan error:', err.message);
-    return [];
-  }
+  console.log('ℹ️ No opportunities found at this time.');
+  return [];
 };
