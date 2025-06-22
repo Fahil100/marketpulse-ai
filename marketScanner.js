@@ -1,75 +1,101 @@
-const axios = require("axios");
-const TelegramBot = require("node-telegram-bot-api");
+const axios = require('axios');
+const TelegramBot = require('node-telegram-bot-api');
+require('dotenv').config();
 
-// === Environment Variables ===
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 const ALPHA_VANTAGE_API_KEY = process.env.ALPHA_VANTAGE_API_KEY;
+const FINNHUB_API_KEY = process.env.FINNHUB_API_KEY;
+const bot = new TelegramBot(TELEGRAM_TOKEN);
 
-const bot = new TelegramBot(TELEGRAM_BOT_TOKEN);
+const STOCKS = ['AAPL', 'TSLA', 'NVDA', 'GOOGL', 'META', 'MSFT'];
 
-// === Symbols to Scan ===
-const symbols = ["AAPL", "GOOGL", "TSLA", "MSFT", "NVDA", "AMZN", "META", "AMD", "NFLX"];
-
-async function fetchStockData(symbol) {
-  const url = `https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=${symbol}&interval=5min&apikey=${ALPHA_VANTAGE_API_KEY}`;
-
+async function getAlphaVantagePrice(symbol) {
+  const url = `https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=${symbol}&interval=1min&apikey=${ALPHA_VANTAGE_API_KEY}`;
   try {
     const response = await axios.get(url);
-    const timeSeries = response.data["Time Series (5min)"];
-    if (!timeSeries) {
-      console.error(`❌ No time series for ${symbol}`);
-      return null;
-    }
-
-    const timestamps = Object.keys(timeSeries);
-    const latest = timeSeries[timestamps[0]];
-    const previous = timeSeries[timestamps[1]];
-    const latestPrice = parseFloat(latest["4. close"]);
-    const prevPrice = parseFloat(previous["4. close"]);
-    const change = ((latestPrice - prevPrice) / prevPrice) * 100;
-
-    return { symbol, latestPrice, prevPrice, change: change.toFixed(2) };
-  } catch (error) {
-    console.error(`❌ Error fetching ${symbol}: ${error.message}`);
+    const data = response.data['Time Series (1min)'];
+    if (!data) return null;
+    const times = Object.keys(data);
+    const latest = data[times[0]];
+    const open = parseFloat(latest['1. open']);
+    const close = parseFloat(latest['4. close']);
+    return { symbol, open, close };
+  } catch (err) {
+    console.error(`❌ Failed to fetch price for ${symbol}:`, err.message);
     return null;
   }
 }
 
-async function sendAlert(message) {
+async function getFinnhubData(symbol) {
+  const newsUrl = `https://finnhub.io/api/v1/news/${symbol}?token=${FINNHUB_API_KEY}`;
+  const quoteUrl = `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${FINNHUB_API_KEY}`;
+  const optionsUrl = `https://finnhub.io/api/v1/stock/option-chain?symbol=${symbol}&token=${FINNHUB_API_KEY}`;
+  const shortInterestUrl = `https://finnhub.io/api/v1/stock/short-interest?symbol=${symbol}&token=${FINNHUB_API_KEY}`;
+
   try {
-    await bot.sendMessage(TELEGRAM_CHAT_ID, message);
-  } catch (error) {
-    console.error("❌ Failed to send Telegram alert:", error.message);
+    const [newsRes, quoteRes, optionsRes, shortRes] = await Promise.all([
+      axios.get(newsUrl),
+      axios.get(quoteUrl),
+      axios.get(optionsUrl),
+      axios.get(shortInterestUrl)
+    ]);
+
+    return {
+      news: newsRes.data.slice(0, 2),
+      quote: quoteRes.data,
+      options: optionsRes.data.data || [],
+      shortInterest: shortRes.data[0] || {}
+    };
+  } catch (err) {
+    console.error(`❌ Finnhub fetch error: ${symbol}`, err.message);
+    return {};
   }
 }
 
-async function scanMarket() {
-  console.log("📡 Scanning Market...");
-  const results = [];
+function analyzeBreakout(open, close) {
+  const change = ((close - open) / open) * 100;
+  return change >= 5 ? `🚀 Breakout: +${change.toFixed(2)}%` : null;
+}
 
-  for (let i = 0; i < symbols.length; i++) {
-    const stock = await fetchStockData(symbols[i]);
-    if (stock && Math.abs(stock.change) >= 5) {
-      results.push(stock);
+function analyzeOptions(options) {
+  const unusual = options.filter(o => o.openInterest > 1000 && o.volume > 1000);
+  return unusual.length > 0 ? `🧠 Options Radar: ${unusual.length} unusual contracts` : null;
+}
+
+function analyzeShortInterest(short) {
+  return short.shortInterest && short.shortInterest > 1000000
+    ? `🔥 High Short Interest: ${short.shortInterest.toLocaleString()}`
+    : null;
+}
+
+function generateSummary(symbol, details) {
+  return `📊 ${symbol} ALERT\n${details.filter(Boolean).join('\n')}`;
+}
+
+async function runScanner() {
+  console.log('📡 Running MarketPulse-AI Full Scanner...');
+  for (let symbol of STOCKS) {
+    const priceData = await getAlphaVantagePrice(symbol);
+    if (!priceData) continue;
+
+    const breakout = analyzeBreakout(priceData.open, priceData.close);
+    if (!breakout) continue;
+
+    const { news, options, shortInterest } = await getFinnhubData(symbol);
+    const optionLabel = analyzeOptions(options);
+    const shortLabel = analyzeShortInterest(shortInterest);
+
+    const headline = news?.[0]?.headline || 'No major news available';
+    const summary = generateSummary(symbol, [breakout, optionLabel, shortLabel, `📰 ${headline}`]);
+
+    try {
+      await bot.sendMessage(TELEGRAM_CHAT_ID, summary);
+      console.log(`✅ Alert sent for ${symbol}`);
+    } catch (err) {
+      console.error(`❌ Failed to send Telegram message for ${symbol}:`, err.message);
     }
-    await new Promise((r) => setTimeout(r, 15000)); // wait 15 seconds to avoid rate limits
-  }
-
-  if (results.length === 0) {
-    console.log("✅ No major movers right now.");
-    return;
-  }
-
-  for (const stock of results) {
-    const message = `🚨 ${stock.symbol} moved ${stock.change}% in last 5 mins.\nPrice: $${stock.latestPrice}`;
-    await sendAlert(message);
   }
 }
 
-// === Entry point ===
-if (require.main === module) {
-  scanMarket();
-}
-
-module.exports = { scanMarket };
+module.exports = runScanner;
