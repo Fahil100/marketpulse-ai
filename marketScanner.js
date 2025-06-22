@@ -56,11 +56,11 @@ function getTradeSignal(changePercent) {
 async function checkVolumeSpike(ticker) {
   try {
     const res = await axios.get(`https://finnhub.io/api/v1/stock/metric?symbol=${ticker}&metric=all&token=${FINNHUB_API_KEY}`);
-    const volume = res.data.metric["10DayAverageTradingVolume"];
-    const recentVolumeRes = await axios.get(`https://finnhub.io/api/v1/quote?symbol=${ticker}&token=${FINNHUB_API_KEY}`);
-    const currentVolume = recentVolumeRes.data.v;
+    const avgVol = res.data.metric["10DayAverageTradingVolume"];
+    const quote = await axios.get(`https://finnhub.io/api/v1/quote?symbol=${ticker}&token=${FINNHUB_API_KEY}`);
+    const currentVol = quote.data.v;
 
-    if (currentVolume > volume * 1.5) {
+    if (currentVol > avgVol * 1.5) {
       return "🏦 Unusual volume detected — Possible institutional activity";
     }
   } catch (error) {
@@ -69,24 +69,35 @@ async function checkVolumeSpike(ticker) {
   return null;
 }
 
+function generateGPTStyleCommentary(change, signal, reason, volumeNote) {
+  let sentiment = signal.includes("BUY") ? "strong bullish momentum" :
+                  signal.includes("HOLD") ? "moderate upward pressure" :
+                  "uncertain sentiment";
+
+  let volumeTag = volumeNote ? " and high volume suggests institutional interest" : "";
+  return `🤖 Summary: ${sentiment} driven by "${reason}"${volumeTag}.`;
+}
+
 async function analyzeStock(ticker) {
   try {
-    const res = await axios.get(`https://finnhub.io/api/v1/quote?symbol=${ticker}&token=${FINNHUB_API_KEY}`);
-    const data = res.data;
+    const quote = await axios.get(`https://finnhub.io/api/v1/quote?symbol=${ticker}&token=${FINNHUB_API_KEY}`);
+    const data = quote.data;
     const changePercent = ((data.c - data.pc) / data.pc) * 100;
 
     if (changePercent >= 5) {
-      const headline = await getLatestNews(ticker);
+      const reason = await getLatestNews(ticker) || "No headline available";
       const signal = getTradeSignal(changePercent);
       const volumeNote = await checkVolumeSpike(ticker);
+      const summary = generateGPTStyleCommentary(changePercent, signal, reason, volumeNote);
 
       return {
         ticker,
         price: data.c,
         change: changePercent.toFixed(2),
-        reason: headline || "No headline available",
+        reason,
         signal,
-        volumeNote
+        volumeNote,
+        summary
       };
     }
   } catch (error) {
@@ -125,9 +136,9 @@ async function runScanner() {
   for (const ticker of uniqueTickers) {
     const result = await analyzeStock(ticker);
     if (result) {
-      const volumeText = result.volumeNote ? `\n${result.volumeNote}` : "";
+      const volNote = result.volumeNote ? `\n${result.volumeNote}` : "";
       await sendTelegramAlert(
-        `📈 *${result.ticker}* is up *${result.change}%* — Price: $${result.price}\n📰 Reason: ${result.reason}\n📊 Signal: ${result.signal}${volumeText}`
+        `📈 *${result.ticker}* is up *${result.change}%* — Price: $${result.price}\n📰 Reason: ${result.reason}\n📊 Signal: ${result.signal}${volNote}\n${result.summary}`
       );
     }
   }
