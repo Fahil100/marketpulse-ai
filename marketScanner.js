@@ -31,6 +31,18 @@ async function getTrendingStocks() {
   }
 }
 
+async function getLatestNews(ticker) {
+  try {
+    const res = await axios.get(`https://finnhub.io/api/v1/company-news?symbol=${ticker}&from=2024-01-01&to=2025-12-31&token=${FINNHUB_API_KEY}`);
+    if (Array.isArray(res.data) && res.data.length > 0) {
+      return res.data[0].headline;
+    }
+  } catch (error) {
+    console.error(`❌ Failed to get news for ${ticker}:`, error.message);
+  }
+  return null;
+}
+
 async function analyzeStock(ticker) {
   try {
     const res = await axios.get(`https://finnhub.io/api/v1/quote?symbol=${ticker}&token=${FINNHUB_API_KEY}`);
@@ -38,10 +50,12 @@ async function analyzeStock(ticker) {
     const changePercent = ((data.c - data.pc) / data.pc) * 100;
 
     if (changePercent >= 5) {
+      const headline = await getLatestNews(ticker);
       return {
         ticker,
         price: data.c,
-        change: changePercent.toFixed(2)
+        change: changePercent.toFixed(2),
+        reason: headline || "No headline available"
       };
     }
   } catch (error) {
@@ -80,13 +94,17 @@ async function runScanner() {
   for (const ticker of uniqueTickers) {
     const result = await analyzeStock(ticker);
     if (result) {
-      await sendTelegramAlert(`📈 *${result.ticker}* is up *${result.change}%* — Price: $${result.price}`);
+      await sendTelegramAlert(
+        `📈 *${result.ticker}* is up *${result.change}%* — Price: $${result.price}\n📰 Reason: ${result.reason}`
+      );
     }
   }
 
   const gold = await analyzeGold();
   if (gold) {
-    await sendTelegramAlert(`🪙 *Gold Alert* — XAU/USD is up *${gold.change}%* — Price: $${gold.price}`);
+    await sendTelegramAlert(
+      `🪙 *Gold Alert* — XAU/USD is up *${gold.change}%* — Price: $${gold.price}`
+    );
   }
 
   console.log("✅ Scan complete.");
