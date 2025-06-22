@@ -33,7 +33,6 @@ async function getShortInterest() {
 }
 
 async function isInstitutionalVolumeSpike(currentPrice) {
-  // Simulated logic: trigger when price changes by 1% in 60 seconds
   if (!global.lastPrice) {
     global.lastPrice = currentPrice;
     return false;
@@ -51,7 +50,7 @@ function generateLabel(priceChange) {
 
 async function marketScanner() {
   try {
-    console.log('🔍 Running MarketPulse-AI Full Scanner...');
+    console.log('📡 Running MarketPulse-AI Full Scanner...');
 
     const priceData = await getGoldPrice();
     const currentPrice = priceData.c;
@@ -75,8 +74,7 @@ ${label}
 
 🧠 *Summary:*
 Gold is showing ${label.replace(/[^a-zA-Z ]/g, '')} behavior today.
-${volumeSpike ? '🔵 Institutional activity spike detected.
-' : ''}
+${volumeSpike ? '🔵 Institutional activity spike detected.\n' : ''}
 
 📰 *News:* ${headline}
 📉 *Short Interest:* ${shortInterest}
