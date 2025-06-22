@@ -1,43 +1,101 @@
-const axios = require('axios');
-const sendTelegramAlert = require('./sendTelegramAlert');
+const axios = require("axios");
+require("dotenv").config();
 
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const TELEGRAM_CHANNEL_ID = process.env.TELEGRAM_CHANNEL_ID;
+const FINNHUB_API_KEY = process.env.FINNHUB_API_KEY;
 const TWELVE_DATA_API_KEY = process.env.TWELVE_DATA_API_KEY;
-const GOLD_SYMBOL = 'XAU/USD';
 
-async function fetchGoldPrice() {
+// Helper: Send message to Telegram
+async function sendTelegramAlert(message) {
+  const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
   try {
-    const url = `https://api.twelvedata.com/price?symbol=${encodeURIComponent(GOLD_SYMBOL)}&apikey=${TWELVE_DATA_API_KEY}`;
-    const response = await axios.get(url);
+    await axios.post(url, {
+      chat_id: TELEGRAM_CHANNEL_ID,
+      text: message,
+      parse_mode: "Markdown"
+    });
+    console.log("✅ Telegram alert sent.");
+  } catch (error) {
+    console.error("❌ Failed to send Telegram alert:", error.response?.data || error.message);
+  }
+}
 
-    if (response.data && response.data.price) {
-      return parseFloat(response.data.price);
-    } else {
-      console.warn('No price data returned for gold:', response.data);
-      return null;
+// Step 1: Get top trending stocks from Finnhub
+async function getTrendingStocks() {
+  try {
+    const res = await axios.get(`https://finnhub.io/api/v1/news?category=general&token=${FINNHUB_API_KEY}`);
+    const articles = res.data.slice(0, 10); // Limit to top 10 for speed
+    return articles.map(article => article.related).flat().filter(Boolean);
+  } catch (error) {
+    console.error("❌ Failed to get trending stocks:", error.message);
+    return [];
+  }
+}
+
+// Step 2: Analyze a ticker’s price data (change %)
+async function analyzeStock(ticker) {
+  try {
+    const res = await axios.get(`https://finnhub.io/api/v1/quote?symbol=${ticker}&token=${FINNHUB_API_KEY}`);
+    const data = res.data;
+    const changePercent = ((data.c - data.pc) / data.pc) * 100;
+
+    if (changePercent >= 5) {
+      return {
+        ticker,
+        price: data.c,
+        change: changePercent.toFixed(2)
+      };
     }
   } catch (error) {
-    console.error('Error fetching gold price:', error.message);
-    return null;
+    console.error(`❌ Failed to analyze ${ticker}:`, error.message);
   }
+  return null;
 }
 
-async function scanMarket() {
-  console.log('📡 Scanning gold market...');
+// Step 3: Check gold price change (Twelve Data)
+async function analyzeGold() {
+  try {
+    const res = await axios.get(`https://api.twelvedata.com/time_series?symbol=XAU/USD&interval=1min&outputsize=2&apikey=${TWELVE_DATA_API_KEY}`);
+    const values = res.data.values;
+    const latest = parseFloat(values[0].close);
+    const previous = parseFloat(values[1].close);
+    const change = ((latest - previous) / previous) * 100;
 
-  const price = await fetchGoldPrice();
-  if (!price) {
-    console.log('⚠️ Skipping alert: No price received.');
-    return;
+    if (change >= 0.5) {
+      return {
+        ticker: "XAU/USD",
+        price: latest,
+        change: change.toFixed(2)
+      };
+    }
+  } catch (error) {
+    console.error("❌ Failed to analyze gold:", error.message);
   }
-
-  // LIVE TRADING SIGNAL: Very basic logic, expand as needed
-  if (price > 3400) {
-    await sendTelegramAlert(`📈 GOLD BUY SIGNAL\nCurrent Price: $${price.toFixed(2)}\nConditions met. Consider buying.`);
-  } else if (price < 3350) {
-    await sendTelegramAlert(`📉 GOLD SELL SIGNAL\nCurrent Price: $${price.toFixed(2)}\nConditions met. Consider selling.`);
-  } else {
-    console.log('ℹ️ No opportunities found at this time.');
-  }
+  return null;
 }
 
-scanMarket();
+// Step 4: Main scanner
+async function runScanner() {
+  console.log("🔍 Running MarketPulse-AI Live Scanner...");
+
+  const tickers = await getTrendingStocks();
+  const uniqueTickers = [...new Set(tickers)].slice(0, 10); // Clean duplicates
+
+  for (const ticker of uniqueTickers) {
+    const result = await analyzeStock(ticker);
+    if (result) {
+      await sendTelegramAlert(`📈 *${result.ticker}* is up *${result.change}%* — Price: $${result.price}`);
+    }
+  }
+
+  const gold = await analyzeGold();
+  if (gold) {
+    await sendTelegramAlert(`🪙 *Gold Alert* — XAU/USD is up *${gold.change}%* — Price: $${gold.price}`);
+  }
+
+  console.log("✅ Scan complete.");
+}
+
+// Run the scanner
+runScanner();
