@@ -53,6 +53,22 @@ function getTradeSignal(changePercent) {
   }
 }
 
+async function checkVolumeSpike(ticker) {
+  try {
+    const res = await axios.get(`https://finnhub.io/api/v1/stock/metric?symbol=${ticker}&metric=all&token=${FINNHUB_API_KEY}`);
+    const volume = res.data.metric["10DayAverageTradingVolume"];
+    const recentVolumeRes = await axios.get(`https://finnhub.io/api/v1/quote?symbol=${ticker}&token=${FINNHUB_API_KEY}`);
+    const currentVolume = recentVolumeRes.data.v;
+
+    if (currentVolume > volume * 1.5) {
+      return "🏦 Unusual volume detected — Possible institutional activity";
+    }
+  } catch (error) {
+    console.error(`❌ Failed volume check for ${ticker}:`, error.message);
+  }
+  return null;
+}
+
 async function analyzeStock(ticker) {
   try {
     const res = await axios.get(`https://finnhub.io/api/v1/quote?symbol=${ticker}&token=${FINNHUB_API_KEY}`);
@@ -62,12 +78,15 @@ async function analyzeStock(ticker) {
     if (changePercent >= 5) {
       const headline = await getLatestNews(ticker);
       const signal = getTradeSignal(changePercent);
+      const volumeNote = await checkVolumeSpike(ticker);
+
       return {
         ticker,
         price: data.c,
         change: changePercent.toFixed(2),
         reason: headline || "No headline available",
-        signal
+        signal,
+        volumeNote
       };
     }
   } catch (error) {
@@ -106,8 +125,9 @@ async function runScanner() {
   for (const ticker of uniqueTickers) {
     const result = await analyzeStock(ticker);
     if (result) {
+      const volumeText = result.volumeNote ? `\n${result.volumeNote}` : "";
       await sendTelegramAlert(
-        `📈 *${result.ticker}* is up *${result.change}%* — Price: $${result.price}\n📰 Reason: ${result.reason}\n📊 Signal: ${result.signal}`
+        `📈 *${result.ticker}* is up *${result.change}%* — Price: $${result.price}\n📰 Reason: ${result.reason}\n📊 Signal: ${result.signal}${volumeText}`
       );
     }
   }
