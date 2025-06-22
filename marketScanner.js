@@ -6,7 +6,6 @@ const TELEGRAM_CHANNEL_ID = process.env.TELEGRAM_CHANNEL_ID;
 const FINNHUB_API_KEY = process.env.FINNHUB_API_KEY;
 const TWELVE_DATA_API_KEY = process.env.TWELVE_DATA_API_KEY;
 
-// Helper: Send message to Telegram
 async function sendTelegramAlert(message) {
   const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
   try {
@@ -21,11 +20,10 @@ async function sendTelegramAlert(message) {
   }
 }
 
-// Step 1: Get top trending stocks from Finnhub
 async function getTrendingStocks() {
   try {
     const res = await axios.get(`https://finnhub.io/api/v1/news?category=general&token=${FINNHUB_API_KEY}`);
-    const articles = res.data.slice(0, 10); // Limit to top 10 for speed
+    const articles = res.data.slice(0, 10);
     return articles.map(article => article.related).flat().filter(Boolean);
   } catch (error) {
     console.error("❌ Failed to get trending stocks:", error.message);
@@ -33,7 +31,6 @@ async function getTrendingStocks() {
   }
 }
 
-// Step 2: Analyze a ticker’s price data (change %)
 async function analyzeStock(ticker) {
   try {
     const res = await axios.get(`https://finnhub.io/api/v1/quote?symbol=${ticker}&token=${FINNHUB_API_KEY}`);
@@ -53,7 +50,6 @@ async function analyzeStock(ticker) {
   return null;
 }
 
-// Step 3: Check gold price change (Twelve Data)
 async function analyzeGold() {
   try {
     const res = await axios.get(`https://api.twelvedata.com/time_series?symbol=XAU/USD&interval=1min&outputsize=2&apikey=${TWELVE_DATA_API_KEY}`);
@@ -75,12 +71,11 @@ async function analyzeGold() {
   return null;
 }
 
-// Step 4: Main scanner
 async function runScanner() {
   console.log("🔍 Running MarketPulse-AI Live Scanner...");
 
   const tickers = await getTrendingStocks();
-  const uniqueTickers = [...new Set(tickers)].slice(0, 10); // Clean duplicates
+  const uniqueTickers = [...new Set(tickers)].slice(0, 10);
 
   for (const ticker of uniqueTickers) {
     const result = await analyzeStock(ticker);
@@ -97,8 +92,4 @@ async function runScanner() {
   console.log("✅ Scan complete.");
 }
 
-// Run the scanner
 runScanner();
-
-// ✅ TEMP: Send a Telegram test alert to confirm connection
-sendTelegramAlert("🚨 *Test Alert:* MarketPulse-AI is live and sending messages ✅");
