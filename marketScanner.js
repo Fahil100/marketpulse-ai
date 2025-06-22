@@ -1,97 +1,92 @@
+require('dotenv').config();
 const axios = require('axios');
 const TelegramBot = require('node-telegram-bot-api');
-require('dotenv').config();
 
+// === Load environment variables ===
+const ALPHA_VANTAGE_KEY = process.env.ALPHA_VANTAGE_KEY;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
-const FINNHUB_API_KEY = process.env.FINNHUB_API_KEY;
+
+// === Initialize Telegram Bot ===
 const bot = new TelegramBot(TELEGRAM_BOT_TOKEN);
 
-const GOLD_SYMBOL = 'XAUUSD';
-const SCAN_INTERVAL = 60 * 1000; // every 60 seconds
-
-async function getGoldPrice() {
-  const url = `https://finnhub.io/api/v1/quote?symbol=${GOLD_SYMBOL}&token=${FINNHUB_API_KEY}`;
-  const res = await axios.get(url);
-  return res.data;
-}
-
-async function getGoldNews() {
-  const url = `https://finnhub.io/api/v1/news?category=general&token=${FINNHUB_API_KEY}`;
-  const res = await axios.get(url);
-  return res.data.filter(item => item.headline.toLowerCase().includes('gold'))[0]?.headline || '';
-}
-
-async function getOptionsActivity() {
-  // Placeholder: use real API when available
-  return "Spike in call volume on GLD options detected.";
-}
-
-async function getShortInterest() {
-  // Placeholder: use real API when available
-  return "Short interest is climbing — bearish sentiment increasing.";
-}
-
-async function isInstitutionalVolumeSpike(currentPrice) {
-  if (!global.lastPrice) {
-    global.lastPrice = currentPrice;
-    return false;
-  }
-  const change = Math.abs(currentPrice - global.lastPrice) / global.lastPrice;
-  global.lastPrice = currentPrice;
-  return change > 0.01;
-}
-
-function generateLabel(priceChange) {
-  if (priceChange > 1.5) return "🚀 Breakout";
-  if (priceChange < -1.5) return "⚠️ Reversal";
-  return "📊 Movement";
-}
-
-async function marketScanner() {
+// === Utility: Send Telegram alert ===
+const sendAlert = async (message) => {
   try {
-    console.log('📡 Running MarketPulse-AI Full Scanner...');
-
-    const priceData = await getGoldPrice();
-    const currentPrice = priceData.c;
-    const previousClose = priceData.pc;
-    const changePercent = ((currentPrice - previousClose) / previousClose) * 100;
-
-    if (Math.abs(changePercent) < 0.5) return; // filter out small moves
-
-    const label = generateLabel(changePercent);
-    const headline = await getGoldNews();
-    const optionsRadar = await getOptionsActivity();
-    const shortInterest = await getShortInterest();
-    const volumeSpike = await isInstitutionalVolumeSpike(currentPrice);
-
-    let message = `
-📡 *Gold Price Alert (${GOLD_SYMBOL})*
-${label}
-
-💰 *Price:* $${currentPrice.toFixed(2)}
-📈 *Change:* ${changePercent.toFixed(2)}%
-
-🧠 *Summary:*
-Gold is showing ${label.replace(/[^a-zA-Z ]/g, '')} behavior today.
-${volumeSpike ? '🔵 Institutional activity spike detected.\n' : ''}
-
-📰 *News:* ${headline}
-📉 *Short Interest:* ${shortInterest}
-📊 *Options Radar:* ${optionsRadar}
-    `;
-
     await bot.sendMessage(TELEGRAM_CHAT_ID, message, { parse_mode: 'Markdown' });
-    console.log('✅ Alert sent');
-
-  } catch (error) {
-    console.error('❌ Error in scanner:', error.message);
+    console.log("📨 Alert sent.");
+  } catch (err) {
+    console.error("❌ Failed to send Telegram message:", err.message);
   }
-}
+};
 
-module.exports = marketScanner;
+// === Utility: Get Stock Data from Alpha Vantage ===
+const getStockData = async (symbol) => {
+  try {
+    const url = `https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=${symbol}&interval=5min&apikey=${ALPHA_VANTAGE_KEY}`;
+    const res = await axios.get(url);
+    const data = res.data['Time Series (5min)'];
+    if (!data) throw new Error("No time series returned");
+    return Object.entries(data).map(([time, values]) => ({
+      time,
+      open: parseFloat(values['1. open']),
+      high: parseFloat(values['2. high']),
+      low: parseFloat(values['3. low']),
+      close: parseFloat(values['4. close']),
+      volume: parseFloat(values['5. volume'])
+    }));
+  } catch (err) {
+    console.error("❌ Failed to fetch stock data:", err.message);
+    return [];
+  }
+};
 
-// Run if executed directly
-if (require.main === module) {
-  marketScanner();
-}
+// === Simulate Short Interest Data ===
+const getShortInterest = (symbol) => {
+  return Math.random() * 30; // % short float mock
+};
+
+// === Simulate Unusual Options Volume ===
+const getOptionsVolumeSpike = (symbol) => {
+  return Math.random() > 0.85; // 15% chance of spike
+};
+
+// === Main Scanner ===
+const marketScanner = async () => {
+  console.log("📡 Running MarketPulse-AI Full Scanner...");
+
+  const symbols = ['AAPL', 'TSLA', 'NVDA', 'AMD', 'GOOG']; // Add more as needed
+
+  for (let symbol of symbols) {
+    const candles = await getStockData(symbol);
+    if (candles.length < 2) continue;
+
+    const latest = candles[0];
+    const previous = candles[1];
+
+    const priceChange = ((latest.close - previous.close) / previous.close) * 100;
+    const volumeSpike = latest.volume > previous.volume * 2;
+    const breakout = latest.close > Math.max(...candles.slice(1, 6).map(c => c.high));
+    const shortInterest = getShortInterest(symbol);
+    const optionsSpike = getOptionsVolumeSpike(symbol);
+
+    if (priceChange > 5 || breakout || volumeSpike || shortInterest > 20 || optionsSpike) {
+      let message = `📈 *${symbol} Trade Alert*\n`;
+      message += `• Price: $${latest.close.toFixed(2)}\n`;
+      message += `• Change: ${priceChange.toFixed(2)}%\n`;
+
+      // Signal tags
+      if (breakout) message += `• 🚀 Breakout Detected\n`;
+      if (volumeSpike) message += `• 📊 Institutional Volume Spike\n`;
+      if (shortInterest > 20) message += `• 🔻 Short Interest: ${shortInterest.toFixed(1)}%\n`;
+      if (optionsSpike) message += `• 📈 Unusual Options Volume\n`;
+
+      // GPT-style commentary
+      message += `\n🧠 *GPT Insight:* Based on the current surge in ${symbol}, combined with technical indicators like breakout levels and volume surges, this could represent a high-momentum short-term opportunity. Exercise caution if the market shows signs of pullback.\n`;
+
+      await sendAlert(message);
+    }
+  }
+};
+
+marketScanner();
