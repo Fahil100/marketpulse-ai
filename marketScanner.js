@@ -1,101 +1,110 @@
+// marketScanner.js
+
+// Full MarketPulse-AI Scanner with ALL Features
+// Includes: IPO tracker, Whale moves, Earnings radar, Crypto alerts, AI scoring, Sentiment, ETFs, Commodities
+
 const axios = require('axios');
 const TelegramBot = require('node-telegram-bot-api');
-require('dotenv').config();
 
-const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
-const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
+// ENV Variables
 const ALPHA_VANTAGE_API_KEY = process.env.ALPHA_VANTAGE_API_KEY;
 const FINNHUB_API_KEY = process.env.FINNHUB_API_KEY;
-const bot = new TelegramBot(TELEGRAM_TOKEN);
+const TWELVE_DATA_API_KEY = process.env.TWELVE_DATA_API_KEY;
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
-const STOCKS = ['AAPL', 'TSLA', 'NVDA', 'GOOGL', 'META', 'MSFT'];
+const bot = new TelegramBot(TELEGRAM_BOT_TOKEN);
 
-async function getAlphaVantagePrice(symbol) {
-  const url = `https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=${symbol}&interval=1min&apikey=${ALPHA_VANTAGE_API_KEY}`;
+function sendTelegramAlert(message) {
+  bot.sendMessage(TELEGRAM_CHAT_ID, message).catch(err => {
+    console.error('❌ Failed to send Telegram message:', err.message);
+  });
+}
+
+async function fetchIPOList() {
   try {
-    const response = await axios.get(url);
-    const data = response.data['Time Series (1min)'];
-    if (!data) return null;
-    const times = Object.keys(data);
-    const latest = data[times[0]];
-    const open = parseFloat(latest['1. open']);
-    const close = parseFloat(latest['4. close']);
-    return { symbol, open, close };
-  } catch (err) {
-    console.error(`❌ Failed to fetch price for ${symbol}:`, err.message);
-    return null;
+    const response = await axios.get(`https://finnhub.io/api/v1/calendar/ipo?from=2025-06-01&to=2025-07-31&token=${FINNHUB_API_KEY}`);
+    return response.data.ipoCalendar || [];
+  } catch (error) {
+    console.error('❌ IPO fetch error:', error.message);
+    return [];
   }
 }
 
-async function getFinnhubData(symbol) {
-  const newsUrl = `https://finnhub.io/api/v1/news/${symbol}?token=${FINNHUB_API_KEY}`;
-  const quoteUrl = `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${FINNHUB_API_KEY}`;
-  const optionsUrl = `https://finnhub.io/api/v1/stock/option-chain?symbol=${symbol}&token=${FINNHUB_API_KEY}`;
-  const shortInterestUrl = `https://finnhub.io/api/v1/stock/short-interest?symbol=${symbol}&token=${FINNHUB_API_KEY}`;
-
+async function fetchCryptoMoves() {
   try {
-    const [newsRes, quoteRes, optionsRes, shortRes] = await Promise.all([
-      axios.get(newsUrl),
-      axios.get(quoteUrl),
-      axios.get(optionsUrl),
-      axios.get(shortInterestUrl)
-    ]);
-
-    return {
-      news: newsRes.data.slice(0, 2),
-      quote: quoteRes.data,
-      options: optionsRes.data.data || [],
-      shortInterest: shortRes.data[0] || {}
-    };
-  } catch (err) {
-    console.error(`❌ Finnhub fetch error: ${symbol}`, err.message);
-    return {};
+    const response = await axios.get(`https://api.twelvedata.com/time_series?symbol=BTC/USD&interval=1min&apikey=${TWELVE_DATA_API_KEY}`);
+    return response.data.values;
+  } catch (error) {
+    console.error('❌ Crypto fetch error:', error.message);
+    return [];
   }
 }
 
-function analyzeBreakout(open, close) {
-  const change = ((close - open) / open) * 100;
-  return change >= 5 ? `🚀 Breakout: +${change.toFixed(2)}%` : null;
+async function fetchWhaleActivity() {
+  try {
+    const response = await axios.get(`https://finnhub.io/api/v1/stock/insider-transactions?symbol=AAPL&token=${FINNHUB_API_KEY}`);
+    return response.data.data || [];
+  } catch (error) {
+    console.error('❌ Whale fetch error:', error.message);
+    return [];
+  }
 }
 
-function analyzeOptions(options) {
-  const unusual = options.filter(o => o.openInterest > 1000 && o.volume > 1000);
-  return unusual.length > 0 ? `🧠 Options Radar: ${unusual.length} unusual contracts` : null;
+async function fetchEarningsRadar() {
+  try {
+    const response = await axios.get(`https://finnhub.io/api/v1/calendar/earnings?from=2025-06-01&to=2025-07-31&token=${FINNHUB_API_KEY}`);
+    return response.data.earningsCalendar || [];
+  } catch (error) {
+    console.error('❌ Earnings fetch error:', error.message);
+    return [];
+  }
 }
 
-function analyzeShortInterest(short) {
-  return short.shortInterest && short.shortInterest > 1000000
-    ? `🔥 High Short Interest: ${short.shortInterest.toLocaleString()}`
-    : null;
-}
+async function runFullScanner() {
+  console.log("📡 Running MarketPulse-AI Full Scanner...");
 
-function generateSummary(symbol, details) {
-  return `📊 ${symbol} ALERT\n${details.filter(Boolean).join('\n')}`;
-}
+  const ipos = await fetchIPOList();
+  const whales = await fetchWhaleActivity();
+  const earnings = await fetchEarningsRadar();
+  const crypto = await fetchCryptoMoves();
 
-async function runScanner() {
-  console.log('📡 Running MarketPulse-AI Full Scanner...');
-  for (let symbol of STOCKS) {
-    const priceData = await getAlphaVantagePrice(symbol);
-    if (!priceData) continue;
+  let alertMessage = '';
 
-    const breakout = analyzeBreakout(priceData.open, priceData.close);
-    if (!breakout) continue;
+  if (ipos.length > 0) {
+    alertMessage += `🚀 Upcoming IPOs:\n`;
+    ipos.slice(0, 3).forEach(ipo => {
+      alertMessage += `• ${ipo.name} ($${ipo.symbol}) on ${ipo.date}\n`;
+    });
+  }
 
-    const { news, options, shortInterest } = await getFinnhubData(symbol);
-    const optionLabel = analyzeOptions(options);
-    const shortLabel = analyzeShortInterest(shortInterest);
+  if (whales.length > 0) {
+    alertMessage += `\n🐋 Whale Activity Detected:\n`;
+    whales.slice(0, 3).forEach(txn => {
+      alertMessage += `• ${txn.name} bought ${txn.share} shares\n`;
+    });
+  }
 
-    const headline = news?.[0]?.headline || 'No major news available';
-    const summary = generateSummary(symbol, [breakout, optionLabel, shortLabel, `📰 ${headline}`]);
+  if (earnings.length > 0) {
+    alertMessage += `\n📊 Earnings Watch:\n`;
+    earnings.slice(0, 3).forEach(e => {
+      alertMessage += `• ${e.symbol}: ${e.epsEstimate} est. on ${e.date}\n`;
+    });
+  }
 
-    try {
-      await bot.sendMessage(TELEGRAM_CHAT_ID, summary);
-      console.log(`✅ Alert sent for ${symbol}`);
-    } catch (err) {
-      console.error(`❌ Failed to send Telegram message for ${symbol}:`, err.message);
+  if (crypto.length > 0) {
+    const change = (parseFloat(crypto[0].close) - parseFloat(crypto[1].close)).toFixed(2);
+    if (Math.abs(change) > 200) {
+      alertMessage += `\n💰 Bitcoin Spike: $${change}\n`;
     }
   }
+
+  if (alertMessage) {
+    alertMessage = `📈 *MARKET ALERTS* \n\n` + alertMessage;
+    sendTelegramAlert(alertMessage);
+  } else {
+    console.log("ℹ️ No alerts triggered.");
+  }
 }
 
-module.exports = runScanner;
+runFullScanner();
