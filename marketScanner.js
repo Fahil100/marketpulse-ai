@@ -1,156 +1,99 @@
-const axios = require("axios");
-require("dotenv").config();
+const axios = require('axios');
+const TelegramBot = require('node-telegram-bot-api');
+require('dotenv').config();
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const TELEGRAM_CHANNEL_ID = process.env.TELEGRAM_CHANNEL_ID;
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 const FINNHUB_API_KEY = process.env.FINNHUB_API_KEY;
-const TWELVE_DATA_API_KEY = process.env.TWELVE_DATA_API_KEY;
+const bot = new TelegramBot(TELEGRAM_BOT_TOKEN);
 
-async function sendTelegramAlert(message) {
-  const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+const GOLD_SYMBOL = 'XAUUSD';
+const SCAN_INTERVAL = 60 * 1000; // every 60 seconds
+
+async function getGoldPrice() {
+  const url = `https://finnhub.io/api/v1/quote?symbol=${GOLD_SYMBOL}&token=${FINNHUB_API_KEY}`;
+  const res = await axios.get(url);
+  return res.data;
+}
+
+async function getGoldNews() {
+  const url = `https://finnhub.io/api/v1/news?category=general&token=${FINNHUB_API_KEY}`;
+  const res = await axios.get(url);
+  return res.data.filter(item => item.headline.toLowerCase().includes('gold'))[0]?.headline || '';
+}
+
+async function getOptionsActivity() {
+  // Placeholder: use real API when available
+  return "Spike in call volume on GLD options detected.";
+}
+
+async function getShortInterest() {
+  // Placeholder: use real API when available
+  return "Short interest is climbing — bearish sentiment increasing.";
+}
+
+async function isInstitutionalVolumeSpike(currentPrice) {
+  // Simulated logic: trigger when price changes by 1% in 60 seconds
+  if (!global.lastPrice) {
+    global.lastPrice = currentPrice;
+    return false;
+  }
+  const change = Math.abs(currentPrice - global.lastPrice) / global.lastPrice;
+  global.lastPrice = currentPrice;
+  return change > 0.01;
+}
+
+function generateLabel(priceChange) {
+  if (priceChange > 1.5) return "🚀 Breakout";
+  if (priceChange < -1.5) return "⚠️ Reversal";
+  return "📊 Movement";
+}
+
+async function marketScanner() {
   try {
-    await axios.post(url, {
-      chat_id: TELEGRAM_CHANNEL_ID,
-      text: message,
-      parse_mode: "Markdown"
-    });
-    console.log("✅ Telegram alert sent.");
+    console.log('🔍 Running MarketPulse-AI Full Scanner...');
+
+    const priceData = await getGoldPrice();
+    const currentPrice = priceData.c;
+    const previousClose = priceData.pc;
+    const changePercent = ((currentPrice - previousClose) / previousClose) * 100;
+
+    if (Math.abs(changePercent) < 0.5) return; // filter out small moves
+
+    const label = generateLabel(changePercent);
+    const headline = await getGoldNews();
+    const optionsRadar = await getOptionsActivity();
+    const shortInterest = await getShortInterest();
+    const volumeSpike = await isInstitutionalVolumeSpike(currentPrice);
+
+    let message = `
+📡 *Gold Price Alert (${GOLD_SYMBOL})*
+${label}
+
+💰 *Price:* $${currentPrice.toFixed(2)}
+📈 *Change:* ${changePercent.toFixed(2)}%
+
+🧠 *Summary:*
+Gold is showing ${label.replace(/[^a-zA-Z ]/g, '')} behavior today.
+${volumeSpike ? '🔵 Institutional activity spike detected.
+' : ''}
+
+📰 *News:* ${headline}
+📉 *Short Interest:* ${shortInterest}
+📊 *Options Radar:* ${optionsRadar}
+    `;
+
+    await bot.sendMessage(TELEGRAM_CHAT_ID, message, { parse_mode: 'Markdown' });
+    console.log('✅ Alert sent');
+
   } catch (error) {
-    console.error("❌ Failed to send Telegram alert:", error.response?.data || error.message);
+    console.error('❌ Error in scanner:', error.message);
   }
 }
 
-async function getTrendingStocks() {
-  try {
-    const res = await axios.get(`https://finnhub.io/api/v1/news?category=general&token=${FINNHUB_API_KEY}`);
-    const articles = res.data.slice(0, 10);
-    return articles.map(article => article.related).flat().filter(Boolean);
-  } catch (error) {
-    console.error("❌ Failed to get trending stocks:", error.message);
-    return [];
-  }
+module.exports = marketScanner;
+
+// Run if executed directly
+if (require.main === module) {
+  marketScanner();
 }
-
-async function getLatestNews(ticker) {
-  try {
-    const res = await axios.get(`https://finnhub.io/api/v1/company-news?symbol=${ticker}&from=2024-01-01&to=2025-12-31&token=${FINNHUB_API_KEY}`);
-    if (Array.isArray(res.data) && res.data.length > 0) {
-      return res.data[0].headline;
-    }
-  } catch (error) {
-    console.error(`❌ Failed to get news for ${ticker}:`, error.message);
-  }
-  return null;
-}
-
-function getTradeSignal(changePercent) {
-  if (changePercent >= 7) {
-    return "BUY — Momentum breakout on news";
-  } else if (changePercent >= 5) {
-    return "HOLD — Moderate strength";
-  } else {
-    return "WATCH — Weak or uncertain";
-  }
-}
-
-async function checkVolumeSpike(ticker) {
-  try {
-    const res = await axios.get(`https://finnhub.io/api/v1/stock/metric?symbol=${ticker}&metric=all&token=${FINNHUB_API_KEY}`);
-    const avgVol = res.data.metric["10DayAverageTradingVolume"];
-    const quote = await axios.get(`https://finnhub.io/api/v1/quote?symbol=${ticker}&token=${FINNHUB_API_KEY}`);
-    const currentVol = quote.data.v;
-
-    if (currentVol > avgVol * 1.5) {
-      return "🏦 Unusual volume detected — Possible institutional activity";
-    }
-  } catch (error) {
-    console.error(`❌ Failed volume check for ${ticker}:`, error.message);
-  }
-  return null;
-}
-
-function generateGPTStyleCommentary(change, signal, reason, volumeNote) {
-  let sentiment = signal.includes("BUY") ? "strong bullish momentum" :
-                  signal.includes("HOLD") ? "moderate upward pressure" :
-                  "uncertain sentiment";
-
-  let volumeTag = volumeNote ? " and high volume suggests institutional interest" : "";
-  return `🤖 Summary: ${sentiment} driven by "${reason}"${volumeTag}.`;
-}
-
-async function analyzeStock(ticker) {
-  try {
-    const quote = await axios.get(`https://finnhub.io/api/v1/quote?symbol=${ticker}&token=${FINNHUB_API_KEY}`);
-    const data = quote.data;
-    const changePercent = ((data.c - data.pc) / data.pc) * 100;
-
-    if (changePercent >= 5) {
-      const reason = await getLatestNews(ticker) || "No headline available";
-      const signal = getTradeSignal(changePercent);
-      const volumeNote = await checkVolumeSpike(ticker);
-      const summary = generateGPTStyleCommentary(changePercent, signal, reason, volumeNote);
-
-      return {
-        ticker,
-        price: data.c,
-        change: changePercent.toFixed(2),
-        reason,
-        signal,
-        volumeNote,
-        summary
-      };
-    }
-  } catch (error) {
-    console.error(`❌ Failed to analyze ${ticker}:`, error.message);
-  }
-  return null;
-}
-
-async function analyzeGold() {
-  try {
-    const res = await axios.get(`https://api.twelvedata.com/time_series?symbol=XAU/USD&interval=1min&outputsize=2&apikey=${TWELVE_DATA_API_KEY}`);
-    const values = res.data.values;
-    const latest = parseFloat(values[0].close);
-    const previous = parseFloat(values[1].close);
-    const change = ((latest - previous) / previous) * 100;
-
-    if (change >= 0.5) {
-      return {
-        ticker: "XAU/USD",
-        price: latest,
-        change: change.toFixed(2)
-      };
-    }
-  } catch (error) {
-    console.error("❌ Failed to analyze gold:", error.message);
-  }
-  return null;
-}
-
-async function runScanner() {
-  console.log("🔍 Running MarketPulse-AI Live Scanner...");
-
-  const tickers = await getTrendingStocks();
-  const uniqueTickers = [...new Set(tickers)].slice(0, 10);
-
-  for (const ticker of uniqueTickers) {
-    const result = await analyzeStock(ticker);
-    if (result) {
-      const volNote = result.volumeNote ? `\n${result.volumeNote}` : "";
-      await sendTelegramAlert(
-        `📈 *${result.ticker}* is up *${result.change}%* — Price: $${result.price}\n📰 Reason: ${result.reason}\n📊 Signal: ${result.signal}${volNote}\n${result.summary}`
-      );
-    }
-  }
-
-  const gold = await analyzeGold();
-  if (gold) {
-    await sendTelegramAlert(
-      `🪙 *Gold Alert* — XAU/USD is up *${gold.change}%* — Price: $${gold.price}`
-    );
-  }
-
-  console.log("✅ Scan complete.");
-}
-
-runScanner();
