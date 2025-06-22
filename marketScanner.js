@@ -99,3 +99,6 @@ async function runScanner() {
 
 // Run the scanner
 runScanner();
+
+// ✅ TEMP: Send a Telegram test alert to confirm connection
+sendTelegramAlert("🚨 *Test Alert:* MarketPulse-AI is live and sending messages ✅");
