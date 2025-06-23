@@ -1,21 +1,26 @@
-const TelegramBot = require('node-telegram-bot-api');
+const axios = require('axios');
 
-const token = process.env.TELEGRAM_BOT_TOKEN;
-const chatId = process.env.TELEGRAM_CHAT_ID;
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 
-if (!token || !chatId) {
+if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
   throw new Error('❌ Telegram Bot Token or Chat ID not set.');
 }
 
-const bot = new TelegramBot(token, { polling: false });
+async function sendTelegramAlert(message) {
+  const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
 
-async function sendTelegramMessage(message) {
   try {
-    await bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
+    const response = await axios.post(url, {
+      chat_id: TELEGRAM_CHAT_ID,
+      text: message,
+    });
     console.log('✅ Telegram alert sent');
-  } catch (err) {
-    console.error('❌ Failed to send alert:', err.message);
+  } catch (error) {
+    console.error('❌ Failed to send alert:', error.message);
   }
 }
 
-module.exports = { sendTelegramMessage };
+module.exports = {
+  sendTelegramAlert
+};
