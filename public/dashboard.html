@@ -1,92 +1,55 @@
+from pathlib import Path
+
+# Define dashboard.html content
+dashboard_html = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>📊 GPT MarketPulse Dashboard</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="UTF-8">
+  <title>📊 MarketPulse-AI Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #0e1117;
-      color: #f1f1f1;
-      margin: 0;
-      padding: 20px;
-    }
-    h1 {
-      color: #00ff99;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 20px;
-      background: #1c1f26;
-    }
-    th, td {
-      padding: 10px;
-      border: 1px solid #333;
-      text-align: left;
-    }
-    th {
-      background: #2c2f36;
-    }
-    img {
-      max-height: 80px;
-    }
-    a {
-      color: #00e0ff;
-    }
+    body { font-family: Arial, sans-serif; margin: 20px; background: #f8f9fa; }
+    h1 { color: #333; }
+    .alert { border: 1px solid #ccc; background: #fff; padding: 10px; margin-bottom: 15px; }
+    .alert img { max-width: 100%; height: auto; }
+    .chart-container { width: 100%; max-width: 700px; margin-top: 30px; }
   </style>
 </head>
 <body>
-  <h1>📊 GPT MarketPulse-AI Dashboard</h1>
-  <p>Live alerts with screenshots, sentiment, confidence, and backtest links.</p>
-
-  <table id="alertsTable">
-    <thead>
-      <tr>
-        <th>🕒 Time</th>
-        <th>📈 Ticker</th>
-        <th>📊 Signal</th>
-        <th>📉 Confidence</th>
-        <th>🧠 Sentiment</th>
-        <th>📝 Reason</th>
-        <th>📸 Chart</th>
-        <th>📘 Backtest</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
+  <h1>📈 MarketPulse-AI Alerts</h1>
+  <div id="alerts"></div>
 
   <script>
-    async function loadAlerts() {
-      try {
-        const res = await fetch('/alerts/logs');
-        const data = await res.json();
-        const tbody = document.querySelector('#alertsTable tbody');
-        tbody.innerHTML = '';
-
-        for (let alert of data.alerts.reverse()) {
-          const row = document.createElement('tr');
-
-          row.innerHTML = `
-            <td>${new Date().toLocaleTimeString()}</td>
-            <td>${alert.ticker}</td>
-            <td>${alert.signalType}</td>
-            <td>${Math.round(alert.confidence * 100)}%</td>
-            <td>${alert.sentiment}</td>
-            <td>${alert.reason}</td>
-            <td>${alert.screenshotUrl ? `<img src="${alert.screenshotUrl}" />` : '❌'}</td>
-            <td><a href="/backtest?ticker=${alert.ticker}" target="_blank">📘 View</a></td>
-          `;
-          tbody.appendChild(row);
-        }
-      } catch (err) {
-        console.error('Error loading alerts:', err);
-      }
+    async function fetchAlerts() {
+      const res = await fetch('/alerts/logs');
+      const data = await res.json();
+      const container = document.getElementById('alerts');
+      container.innerHTML = '';
+      data.alerts.reverse().forEach(alert => {
+        const div = document.createElement('div');
+        div.className = 'alert';
+        div.innerHTML = \`
+          <strong>\${alert.ticker}</strong> - \${alert.signalType} <br>
+          Confidence: \${Math.round(alert.confidence * 100)}%<br>
+          Sentiment: \${alert.sentiment}<br>
+          Recommendation: \${alert.recommendation || 'N/A'}<br>
+          Reason: \${alert.reason || 'N/A'}<br>
+          \${alert.screenshotUrl ? '<img src="' + alert.screenshotUrl + '" />' : ''}
+        \`;
+        container.appendChild(div);
+      });
     }
 
-    loadAlerts();
-    setInterval(loadAlerts, 60000);
+    setInterval(fetchAlerts, 5000);
+    fetchAlerts();
   </script>
 </body>
 </html>
+"""
+
+# Save the dashboard.html file
+file_path = Path("/mnt/data/dashboard.html")
+file_path.write_text(dashboard_html)
+
+file_path.name
