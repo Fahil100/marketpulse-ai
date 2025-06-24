@@ -32,7 +32,7 @@ const tickers = require('./tickers.json');
 async function getSentimentSummary(ticker) {
   try {
     const res = await axios.get(
-      \`https://finnhub.io/api/v1/quote?symbol=\${ticker}&token=\${FINNHUB_API_KEY}\`
+      `https://finnhub.io/api/v1/quote?symbol=${ticker}&token=${FINNHUB_API_KEY}`
     );
     const change = res.data.d || 0;
     return change > 0 ? 'Positive' : change < 0 ? 'Negative' : 'Neutral';
