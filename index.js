@@ -1,4 +1,3 @@
-# Saving the corrected index.js file with updated sentiment logic (replacing the Finnhub news-sentiment endpoint)
 from pathlib import Path
 
 index_js_code = """
