@@ -1,6 +1,3 @@
-from pathlib import Path
-
-index_js_code = """
 const express = require('express');
 const axios = require('axios');
 const dotenv = require('dotenv');
