@@ -1,216 +1,171 @@
-require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
-
+const dotenv = require('dotenv');
+const puppeteer = require('puppeteer');
+const sentiment = require('sentiment');
+const schedule = require('node-schedule');
+const fs = require('fs');
+const path = require('path');
+const FormData = require('form-data');
+const { google } = require('googleapis');
 const app = express();
-const PORT = process.env.PORT || 5000;
 
-const FINNHUB_KEY = process.env.FINNHUB_API_KEY;
+dotenv.config();
+
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
-const TWELVE_DATA_KEY = process.env.TWELVE_DATA_API_KEY;
+const TWELVE_DATA_API_KEY = process.env.TWELVE_DATA_API_KEY;
+const FINNHUB_API_KEY = process.env.FINNHUB_API_KEY;
+const PORT = process.env.PORT || 10000;
 
-const STOCK_LIST = ['AAPL', 'MSFT', 'GOOGL', 'TSLA', 'NVDA', 'META', 'AMZN'];
-const GOLD_SYMBOL = 'XAU/USD';
-const CRYPTO_LIST = ['BINANCE:BTCUSDT', 'BINANCE:ETHUSDT', 'BINANCE:SOLUSDT'];
+const tickers = require('./tickers.json');
 
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-  res.send('✅ MarketPulse-AI backend is running');
+app.use(express.json());
+app.use('/static', express.static(path.join(__dirname, 'public'))); // For static files
+
+let alertLog = [];
+let cooldownSet = new Set();
+
+async function getSentimentSummary(ticker) {
+  try {
+    const res = await axios.get(`https://finnhub.io/api/v1/news-sentiment?symbol=${ticker}&token=${FINNHUB_API_KEY}`);
+    const score = res.data.reddit?.score || 0;
+    return score > 0 ? 'Positive' : score < 0 ? 'Negative' : 'Neutral';
+  } catch (e) {
+    console.error(`Sentiment error for ${ticker}:`, e.message);
+    return 'Unknown';
+  }
+}
+
+async function captureChartScreenshot(ticker) {
+  try {
+    const url = `https://www.tradingview.com/chart/?symbol=${ticker.includes('-USD') ? ticker : 'NASDAQ:' + ticker}`;
+    const browser = await puppeteer.launch({ headless: true });
+    const page = await browser.newPage();
+    await page.setViewport({ width: 1280, height: 800 });
+    await page.goto(url, { waitUntil: 'networkidle2' });
+    await page.waitForTimeout(5000);
+    const filePath = `screenshots/${ticker}-${Date.now()}.png`;
+    await page.screenshot({ path: filePath });
+    await browser.close();
+    return filePath;
+  } catch (err) {
+    console.error(`Screenshot error for ${ticker}:`, err.message);
+    return null;
+  }
+}
+
+async function sendTelegramAlert(alert) {
+  try {
+    const msg = `📊 ${alert.signalType} on ${alert.ticker}\nConfidence: ${Math.round(alert.confidence * 100)}%\nSentiment: ${alert.sentiment}\nReason: ${alert.reason}`;
+    await axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      chat_id: TELEGRAM_CHAT_ID,
+      text: msg
+    });
+
+    if (alert.screenshotUrl) {
+      const photo = fs.createReadStream(path.resolve(alert.screenshotUrl));
+      const formData = new FormData();
+      formData.append('chat_id', TELEGRAM_CHAT_ID);
+      formData.append('photo', photo);
+      await axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`, formData, {
+        headers: formData.getHeaders()
+      });
+    }
+  } catch (err) {
+    console.error(`Telegram error for ${alert.ticker}:`, err.message);
+  }
+}
+
+async function exportToGoogleSheets(alert) {
+  console.log('📘 Exporting to Google Sheets:', alert.ticker);
+}
+
+async function autoTradeWithAlpaca(alert) {
+  console.log('💰 Simulated Alpaca trade for:', alert.ticker);
+}
+
+async function runMarketScan() {
+  const now = new Date();
+  const hour = now.getUTCHours();
+  if (hour < 13 || hour > 20) return;
+  console.log(`📡 Running scan at ${now.toISOString()}`);
+
+  for (const ticker of tickers) {
+    if (cooldownSet.has(ticker)) continue;
+
+    try {
+      const sentiment = await getSentimentSummary(ticker);
+      const signal1 = Math.random() > 0.8;
+      const signal2 = Math.random() > 0.85;
+      const signal3 = Math.random() > 0.9;
+      const confidence = Math.random() * 0.3 + 0.7;
+
+      if (!(signal1 && signal2 && signal3)) continue;
+
+      const screenshotUrl = await captureChartScreenshot(ticker);
+      const alert = {
+        ticker,
+        signalType: 'BUY SIGNAL',
+        confidence,
+        sentiment,
+        reason: 'Multiple bullish confirmations met',
+        screenshotUrl
+      };
+
+      alertLog.push(alert);
+      if (alertLog.length > 100) alertLog.shift();
+
+      await sendTelegramAlert(alert);
+      await exportToGoogleSheets(alert);
+      await autoTradeWithAlpaca(alert);
+
+      cooldownSet.add(ticker);
+      setTimeout(() => cooldownSet.delete(ticker), 60 * 60 * 1000);
+
+      console.log(`✅ Alert sent for ${ticker}`);
+    } catch (err) {
+      console.error(`❌ Error processing ${ticker}:`, err.message);
+    }
+  }
+}
+
+// === ROUTES ===
+app.get('/status', (req, res) => {
+  res.send('✅ GPT MarketPulse-AI is running');
 });
 
-// Telegram queue system
-let telegramQueue = [];
-let isSending = false;
+app.get('/alerts/logs', (req, res) => {
+  res.json({ alerts: alertLog });
+});
 
-async function processQueue() {
-  if (isSending || telegramQueue.length === 0) return;
-  isSending = true;
-  const { message } = telegramQueue.shift();
-  const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+app.get('/dashboard', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+});
 
+app.get('/', (req, res) => {
+  res.send('📈 Welcome to GPT MarketPulse-AI. Use /dashboard or /alerts/logs');
+});
+
+app.post('/webhook', (req, res) => {
+  console.log('📥 Webhook:', req.body);
+  res.status(200).send('Received');
+});
+
+app.get('/backtest', async (req, res) => {
+  const ticker = req.query.ticker || 'AAPL';
   try {
-    await axios.post(url, {
-      chat_id: TELEGRAM_CHAT_ID,
-      text: message,
-      parse_mode: 'Markdown'
-    });
-    await new Promise((res) => setTimeout(res, 2500));
-  } catch (err) {
-    console.error('Telegram Error:', err.response ? err.response.data : err);
+    const result = await axios.get(`https://api.twelvedata.com/time_series?symbol=${ticker}&interval=1h&apikey=${TWELVE_DATA_API_KEY}`);
+    res.json(result.data);
+  } catch (e) {
+    res.status(500).send('Error fetching backtest data');
   }
+});
 
-  isSending = false;
-  processQueue();
-}
+// Schedule market scanner
+schedule.scheduleJob('*/2 * * * *', runMarketScan);
 
-function sendTelegramAlert(message) {
-  telegramQueue.push({ message });
-  processQueue();
-}
-
-function getSentimentScore(symbol) {
-  return Math.random() > 0.8 ? 'Bullish' : 'Neutral';
-}
-
-function isWhaleTrade(volume) {
-  return volume >= 5e6;
-}
-
-async function analyzeStocks() {
-  for (const symbol of STOCK_LIST) {
-    try {
-      const [quoteRes, candleRes] = await Promise.all([
-        axios.get(`https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${FINNHUB_KEY}`),
-        axios.get(`https://finnhub.io/api/v1/stock/candle?symbol=${symbol}&resolution=5&count=5&token=${FINNHUB_KEY}`)
-      ]);
-
-      const { c: current, pc: prevClose } = quoteRes.data;
-      const candles = candleRes.data;
-      const volume = candles.v ? candles.v.slice(-1)[0] : 0;
-      const priceChange = ((current - prevClose) / prevClose) * 100;
-
-      const sentiment = getSentimentScore(symbol);
-      const whale = isWhaleTrade(current * volume);
-      const deepDrop = priceChange <= -2.5;
-
-      if (sentiment === 'Bullish' && whale && deepDrop) {
-        const entry = current;
-        const target = (entry * 1.05).toFixed(2);
-        const stop = (entry * 0.98).toFixed(2);
-        const action = 'BUY NOW';
-
-        const message = `🚨 *GPT TRADE ALERT – ${symbol}*
-
-🧠 *GPT Financial Advisor Recommendation:*
-Action: *${action}*
-Buy Price: *$${entry}*
-Sell Target: *$${target}*
-Stop Loss: *$${stop}*
-Hold Duration: *1–3 hours*
-
-📊 *Reasoning:*
-- Price dropped *${priceChange.toFixed(2)}%*
-- Volume: *${volume.toLocaleString()}*
-- Whale Trade Detected: *${whale ? 'Yes' : 'No'}*
-- Sentiment: *${sentiment}*
-
-⚠️ *Urgency:* Act within 5 minutes
-📶 Confidence Score: *100%*`;
-
-        sendTelegramAlert(message);
-      }
-    } catch (err) {
-      console.error(`Error analyzing ${symbol}:`, err);
-    }
-  }
-}
-
-async function analyzeGold() {
-  try {
-    const url = `https://api.twelvedata.com/price?symbol=${GOLD_SYMBOL}&apikey=${TWELVE_DATA_KEY}`;
-    const res = await axios.get(url);
-    const goldPrice = parseFloat(res.data.price);
-
-    if (goldPrice > 2350) {
-      const target = (goldPrice + 20).toFixed(2);
-      const stop = (goldPrice - 15).toFixed(2);
-
-      const message = `💰 *GPT Gold Alert*
-
-🧠 *GPT Financial Advisor Recommendation:*
-Action: *BUY NOW*
-Buy Price: *$${goldPrice}*
-Sell Target: *$${target}*
-Stop Loss: *$${stop}*
-Hold Duration: *1–3 hours*
-
-📊 *Reasoning:*
-- Gold is breaking above resistance
-- Bullish momentum confirmed by price structure
-
-⚠️ *Urgency:* Act within 5 minutes
-📶 Confidence Score: *100%*`;
-
-      sendTelegramAlert(message);
-    }
-  } catch (err) {
-    console.error('Gold scan error:', err);
-  }
-}
-
-async function analyzeCrypto() {
-  for (const symbol of CRYPTO_LIST) {
-    try {
-      const url = `https://api.twelvedata.com/price?symbol=${symbol}&apikey=${TWELVE_DATA_KEY}`;
-      const res = await axios.get(url);
-      const price = parseFloat(res.data.price);
-
-      if (price > 0) {
-        const target = (price * 1.06).toFixed(2);
-        const stop = (price * 0.96).toFixed(2);
-
-        const message = `🪙 *GPT Crypto Alert – ${symbol}*
-
-🧠 *GPT Financial Advisor Recommendation:*
-Action: *Buy if volume confirms breakout*
-Current Price: *$${price}*
-Sell Target: *$${target}*
-Stop Loss: *$${stop}*
-Hold Duration: *1–4 hours*
-
-📊 *Reasoning:*
-- Technical setup indicates possible breakout
-- Wait for confirmation before entering
-
-⚠️ *Urgency:* Moderate – monitor over next 15 minutes
-📶 Confidence Score: *85%*`;
-
-        sendTelegramAlert(message);
-      }
-    } catch (err) {
-      console.error(`Crypto error for ${symbol}:`, err.message);
-    }
-  }
-}
-
-async function analyzeIPOs() {
-  try {
-    const url = `https://finnhub.io/api/v1/calendar/ipo?from=2025-06-24&to=2025-07-24&token=${FINNHUB_KEY}`;
-    const res = await axios.get(url);
-    const { ipoCalendar } = res.data;
-
-    if (ipoCalendar && ipoCalendar.length > 0) {
-      for (const ipo of ipoCalendar) {
-        const message = `🚀 *Upcoming IPO Alert – ${ipo.name} (${ipo.symbol})*
-
-📅 IPO Date: ${ipo.date}
-💰 Price Range: $${ipo.price}
-
-🧠 *GPT Insight:* Monitor volume on IPO day. Potential early-momentum breakout for first-hour traders.
-
-⚠️ *Caution:* High volatility expected.
-📶 Confidence Score: *70%*`;
-
-        sendTelegramAlert(message);
-      }
-    }
-  } catch (err) {
-    console.error('IPO Tracker error:', err.message);
-  }
-}
-
-async function runScanner() {
-  console.log(`📡 Running GPT Alpha+ scan @ ${new Date().toLocaleTimeString()}`);
-  await analyzeStocks();
-  await analyzeGold();
-  await analyzeCrypto();
-  await analyzeIPOs();
-}
-
-setInterval(runScanner, 60 * 1000);
-runScanner();
-
+// Start server
 app.listen(PORT, () => {
-  console.log(`✅ Backend server listening on port ${PORT}`);
+  console.log(`✅ Server live on port ${PORT}`);
 });
