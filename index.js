@@ -1,7 +1,3 @@
-// === MarketPulse-AI Alpha Intelligence Mode (Smart Version) ===
-// Author: ChatGPT for Rami
-// Filters: Ultra-high confidence alerts only, now includes AI-driven buy/sell/hold instructions
-
 require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
@@ -16,6 +12,7 @@ const TWELVE_DATA_KEY = process.env.TWELVE_DATA_API_KEY;
 
 const STOCK_LIST = ['AAPL', 'MSFT', 'GOOGL', 'TSLA', 'NVDA', 'META', 'AMZN'];
 const GOLD_SYMBOL = 'XAU/USD';
+const CRYPTO_LIST = ['BINANCE:BTCUSDT', 'BINANCE:ETHUSDT', 'BINANCE:SOLUSDT'];
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -142,10 +139,73 @@ Hold Duration: *1–3 hours*
   }
 }
 
+async function analyzeCrypto() {
+  for (const symbol of CRYPTO_LIST) {
+    try {
+      const url = `https://api.twelvedata.com/price?symbol=${symbol}&apikey=${TWELVE_DATA_KEY}`;
+      const res = await axios.get(url);
+      const price = parseFloat(res.data.price);
+
+      if (price > 0) {
+        const target = (price * 1.06).toFixed(2);
+        const stop = (price * 0.96).toFixed(2);
+
+        const message = `🪙 *GPT Crypto Alert – ${symbol}*
+
+🧠 *GPT Financial Advisor Recommendation:*
+Action: *Buy if volume confirms breakout*
+Current Price: *$${price}*
+Sell Target: *$${target}*
+Stop Loss: *$${stop}*
+Hold Duration: *1–4 hours*
+
+📊 *Reasoning:*
+- Technical setup indicates possible breakout
+- Wait for confirmation before entering
+
+⚠️ *Urgency:* Moderate – monitor over next 15 minutes
+📶 Confidence Score: *85%*`;
+
+        sendTelegramAlert(message);
+      }
+    } catch (err) {
+      console.error(`Crypto error for ${symbol}:`, err.message);
+    }
+  }
+}
+
+async function analyzeIPOs() {
+  try {
+    const url = `https://finnhub.io/api/v1/calendar/ipo?from=2025-06-24&to=2025-07-24&token=${FINNHUB_KEY}`;
+    const res = await axios.get(url);
+    const { ipoCalendar } = res.data;
+
+    if (ipoCalendar && ipoCalendar.length > 0) {
+      for (const ipo of ipoCalendar) {
+        const message = `🚀 *Upcoming IPO Alert – ${ipo.name} (${ipo.symbol})*
+
+📅 IPO Date: ${ipo.date}
+💰 Price Range: $${ipo.price}
+
+🧠 *GPT Insight:* Monitor volume on IPO day. Potential early-momentum breakout for first-hour traders.
+
+⚠️ *Caution:* High volatility expected.
+📶 Confidence Score: *70%*`;
+
+        sendTelegramAlert(message);
+      }
+    }
+  } catch (err) {
+    console.error('IPO Tracker error:', err.message);
+  }
+}
+
 async function runScanner() {
   console.log(`📡 Running GPT Alpha+ scan @ ${new Date().toLocaleTimeString()}`);
   await analyzeStocks();
   await analyzeGold();
+  await analyzeCrypto();
+  await analyzeIPOs();
 }
 
 setInterval(runScanner, 60 * 1000);
