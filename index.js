@@ -27,12 +27,12 @@ async function fetchPrice(ticker) {
     const isFx = ticker.includes("USD");
     const symbol = ticker.replace("/", "");
     const url = isFx
-      ? \`https://api.twelvedata.com/price?symbol=\${symbol}&apikey=\${TWELVE_DATA_API_KEY}\`
-      : \`https://finnhub.io/api/v1/quote?symbol=\${ticker}&token=\${FINNHUB_API_KEY}\`;
+      ? `https://api.twelvedata.com/price?symbol=${symbol}&apikey=${TWELVE_DATA_API_KEY}`
+      : `https://finnhub.io/api/v1/quote?symbol=${ticker}&token=${FINNHUB_API_KEY}`;
     const response = await axios.get(url);
     return isFx ? parseFloat(response.data.price) : response.data.c;
   } catch (err) {
-    console.error(\`Price error for \${ticker}:\`, err.message);
+    console.error(`Price error for ${ticker}:`, err.message);
     return null;
   }
 }
@@ -40,7 +40,7 @@ async function fetchPrice(ticker) {
 // Momentum Analyzer
 async function getMomentum(ticker) {
   try {
-    const url = \`https://api.twelvedata.com/time_series?symbol=\${ticker.replace("/", "")}&interval=1min&apikey=\${TWELVE_DATA_API_KEY}&outputsize=5\`;
+    const url = `https://api.twelvedata.com/time_series?symbol=${ticker.replace("/", "")}&interval=1min&apikey=${TWELVE_DATA_API_KEY}&outputsize=5`;
     const res = await axios.get(url);
     const values = res.data.values.map(v => parseFloat(v.close));
     const momentum = ((values[0] - values[4]) / values[4]) * 100;
@@ -55,7 +55,7 @@ async function getMomentum(ticker) {
 // Options Radar
 async function getUnusualOptions(ticker) {
   try {
-    const url = \`https://finnhub.io/api/v1/stock/option-chain?symbol=\${ticker}&token=\${FINNHUB_API_KEY}\`;
+    const url = `https://finnhub.io/api/v1/stock/option-chain?symbol=${ticker}&token=${FINNHUB_API_KEY}`;
     const res = await axios.get(url);
     const data = res.data.data || [];
     return data.filter(opt => opt.volume > 5000 && opt.open_interest > 10000);
@@ -67,7 +67,7 @@ async function getUnusualOptions(ticker) {
 // Insider Tracker
 async function getWhaleBuys(ticker) {
   try {
-    const url = \`https://finnhub.io/api/v1/stock/insider-transactions?symbol=\${ticker}&token=\${FINNHUB_API_KEY}\`;
+    const url = `https://finnhub.io/api/v1/stock/insider-transactions?symbol=${ticker}&token=${FINNHUB_API_KEY}`;
     const res = await axios.get(url);
     return res.data.data.filter(tr => tr.transactionType === "P" && +tr.shares > 10000);
   } catch {
@@ -78,7 +78,7 @@ async function getWhaleBuys(ticker) {
 // Sentiment Analysis
 async function getSentiment(ticker) {
   try {
-    const url = \`https://finnhub.io/api/v1/news-sentiment?symbol=\${ticker}&token=\${FINNHUB_API_KEY}\`;
+    const url = `https://finnhub.io/api/v1/news-sentiment?symbol=${ticker}&token=${FINNHUB_API_KEY}`;
     const res = await axios.get(url);
     return {
       reddit: res.data.redditScore,
@@ -95,9 +95,9 @@ async function takeScreenshot(ticker) {
   if (!screenshotsEnabled) return;
   const browser = await puppeteer.launch();
   const page = await browser.newPage();
-  await page.goto(\`https://www.tradingview.com/chart/?symbol=\${ticker}\`);
+  await page.goto(`https://www.tradingview.com/chart/?symbol=${ticker}`);
   await page.waitForTimeout(4000);
-  await page.screenshot({ path: \`./screenshots/\${ticker}.png\` });
+  await page.screenshot({ path: `./screenshots/${ticker}.png` });
   await browser.close();
 }
 
@@ -114,7 +114,7 @@ async function placeOrder(ticker, side = "buy", qty = 1) {
 
 // Telegram Alert
 async function sendTelegram(message) {
-  const url = \`https://api.telegram.org/bot\${TELEGRAM_BOT_TOKEN}/sendMessage\`;
+  const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
   await axios.post(url, { chat_id: TELEGRAM_CHAT_ID, text: message, parse_mode: "Markdown" });
 }
 
