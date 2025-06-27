@@ -11,8 +11,7 @@
     "axios": "^1.6.0",
     "dotenv": "^16.3.1",
     "google-spreadsheet": "^3.3.0",
-    ""puppeteer-core": "^21.3.8"
-
+    "puppeteer-core": "^21.3.8"
   },
   "engines": {
     "node": ">=20.0.0"
