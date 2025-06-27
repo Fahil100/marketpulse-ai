@@ -218,3 +218,4 @@ async function main() {
 }
 
 main();
+// ✅ CI/CD test - Render auto-deploy check
