@@ -8,11 +8,10 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Pull latest code
-      uses: actions/checkout@v3
+      - name: Checkout repo
+        uses: actions/checkout@v3
 
-    - name: Trigger Render Deploy Hook
-      run: |
-        curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK }}
+      - name: Trigger Render Deploy
+        run: |
+          curl -X POST https://api.render.com/deploy/srv-d1dcbbre5dus73b8ghqg?key=GSryi3m_mDs
