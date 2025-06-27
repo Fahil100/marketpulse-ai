@@ -218,5 +218,17 @@ async function main() {
 }
 
 main();
-// ✅ CI/CD test - Render auto-deploy check
-// Trigger Render deploy test - OK
+async function loop() {
+  while (true) {
+    try {
+      await main();
+    } catch (err) {
+      console.error('Loop Error:', err);
+      await sendTelegram(`❌ Error in loop: ${err.message}`);
+    }
+    await new Promise(r => setTimeout(r, 30000)); // 30-second interval
+  }
+}
+
+loop();
+
