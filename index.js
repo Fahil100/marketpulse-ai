@@ -94,7 +94,7 @@ async function main() {
   console.log('Starting GPT-Alpha Omega...');
   const alerts = await scanMarkets();
 
-  for (const alert of alerts) {
+  for (const alert of (alerts || [])) {
     const reasoning = await gptReasoning(alert.ticker);
     await sendTelegramAlert(`${alert.message}\n${reasoning}`);
     await captureScreenshot(alert.ticker);
