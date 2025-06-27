@@ -2,7 +2,7 @@
 
 import axios from 'axios';
 import fs from 'fs';
-import puppeteer from 'puppeteer';
+import puppeteer from 'puppeteer-core';
 import { GoogleSpreadsheet } from 'google-spreadsheet';
 import dotenv from 'dotenv';
 dotenv.config();
