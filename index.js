@@ -145,7 +145,16 @@ async function exportToSheets(rows) {
   console.log(`Exporting ${rows.length} rows to Google Sheets.`);
 }
 
+let testSent = false;
+
 async function main() {
+  if (!testSent) {
+    await sendTelegram('✅ Alpha Omega system is online. Monitoring activated.');
+    await sendTelegram('✅ Alpha Omega Telegram alert test injected successfully');
+    await sendTelegram('🧪 NEW TEST: Alpha Omega alert from updated system at ' + new Date().toISOString());
+    testSent = true;
+  }
+
   if (config.enableMarketHoursLimiter && !withinMarketHours()) return;
 
   for (const ticker of watchlist) {
@@ -216,17 +225,9 @@ async function main() {
   }
 }
 
-let firstRun = true;
-
 async function loop() {
   while (true) {
     try {
-      if (firstRun) {
-        await sendTelegram('✅ Alpha Omega system is online. Monitoring activated.');
-        await sendTelegram('✅ Alpha Omega Telegram alert test injected successfully');
-        await sendTelegram('🧪 NEW TEST: Alpha Omega alert from updated system at ' + new Date().toISOString());
-        firstRun = false;
-      }
       await main();
     } catch (err) {
       console.error('Loop Error:', err);
