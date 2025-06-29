@@ -1,5 +1,6 @@
 // GPT-Alpha Omega - Unified Monolithic System (700+ lines)
 // Full System with All Tools, Layers, and Upgrades
+// 🔧 Test Line for GitHub Sync Verification
 
 import dotenv from 'dotenv';
 dotenv.config();
@@ -218,6 +219,7 @@ async function main() {
 }
 
 main();
+
 async function loop() {
   while (true) {
     try {
@@ -226,9 +228,8 @@ async function loop() {
       console.error('Loop Error:', err);
       await sendTelegram(`❌ Error in loop: ${err.message}`);
     }
-    await new Promise(r => setTimeout(r, 30000)); // 30-second interval
+    await new Promise(r => setTimeout(r, 30000));
   }
 }
 
 loop();
-
