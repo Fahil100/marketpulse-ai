@@ -15,7 +15,9 @@
     "node-fetch": "^3.3.2",
     "node-telegram-bot-api": "^0.66.0",
     "puppeteer": "^24.11.0",
-    "puppeteer-core": "^24.10.2"
+    "puppeteer-core": "^24.10.2",
+    "request": "^2.88.2",
+    "tough-cookie": "^5.1.2"
   },
   "engines": {
     "node": ">=20.0.0"
