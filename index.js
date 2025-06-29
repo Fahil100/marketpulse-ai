@@ -146,8 +146,6 @@ async function exportToSheets(rows) {
 }
 
 async function main() {
-  sendTelegram('✅ GPT-Alpha Omega is online.');
-
   if (config.enableMarketHoursLimiter && !withinMarketHours()) return;
 
   for (const ticker of watchlist) {
@@ -206,7 +204,7 @@ async function main() {
   }
 
   if (config.enableGoogleSheetsExport) {
-    await exportToSheets([['Ticker', 'Profit'], ['AAPL', '105.44']]);
+    await exportToSheets([["Ticker", "Profit"], ["AAPL", "105.44"]]);
   }
 
   if (config.enableGPTCommentary) {
@@ -218,11 +216,17 @@ async function main() {
   }
 }
 
-main();
+let firstRun = true;
 
 async function loop() {
   while (true) {
     try {
+      if (firstRun) {
+        await sendTelegram('✅ Alpha Omega system is online. Monitoring activated.');
+        await sendTelegram('✅ Alpha Omega Telegram alert test injected successfully');
+        await sendTelegram('🧪 NEW TEST: Alpha Omega alert from updated system at ' + new Date().toISOString());
+        firstRun = false;
+      }
       await main();
     } catch (err) {
       console.error('Loop Error:', err);
