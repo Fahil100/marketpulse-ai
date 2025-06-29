@@ -1,0 +1,31 @@
+name: 🤖 GPT Auto Code Push and Deploy
+
+on:
+  workflow_dispatch:
+
+jobs:
+  auto-push-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Append test line to index.js
+        run: |
+          echo "// 🤖 Auto-injected test at $(date -u)" >> index.js
+          echo "console.log('✅ Alpha Omega auto test: ' + new Date().toISOString());" >> index.js
+
+      - name: Commit and push
+        run: |
+          git config user.name "GPT-AutoBot"
+          git config user.email "gpt-autobot@users.noreply.github.com"
+          git add index.js
+          git commit -m "🤖 Auto Test: Injected by GPT hands-free system"
+          git push origin main
+
+      - name: Trigger Render Auto-Deploy
+        run: |
+          curl -X POST "https://api.render.com/v1/services/srv-d1dcbbre5dus73b8ghqg/deploys" \
+          -H "Authorization: Bearer rnd_TsYbBgnN4LyOtFmQMEOKQlxXkssN" \
+          -H "Content-Type: application/json" \
+          -d '{}'
