@@ -1,3 +1,4 @@
+// 📷 Chart Screenshot Generator added
 // 💬 Sentiment Analysis Engine injected
 // 🏦 Institutional Flow Radar installed
 // 🔻 Short Interest Monitor activated
