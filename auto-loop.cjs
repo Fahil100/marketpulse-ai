@@ -1,40 +1,39 @@
 // auto-loop.cjs
-const { execSync } = require('child_process');
 const fs = require('fs');
-const path = require('path');
+const { execSync } = require('child_process');
 
-const configPath = path.join(__dirname, 'config.json');
-let lastCommand = '';
+const config = JSON.parse(fs.readFileSync('./config.json', 'utf8'));
 
 console.log('🟢 Level 2: Real-time command loop active.');
 
-setInterval(() => {
-  let config;
-  try {
-    config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-  } catch (err) {
-    console.error('❌ Failed to read config.json:', err.message);
-    return;
-  }
+// Extract all enabled toggles that map to valid commands
+const queue = Object.entries(config.toggles)
+  .filter(([key, value]) => value === true)
+  .map(([key]) => {
+    return `activate ${key.replace(/([A-Z])/g, ' $1').toLowerCase().trim()}`;
+  });
 
-  if (!config || !config.toggles || !config.toggles.optionsRadar) {
-    console.log('⚠️ OptionsRadar is toggled off or config invalid.');
-    return;
-  }
+// Sanity check
+if (queue.length === 0) {
+  console.log('⚠️ No features enabled in config.json toggles.');
+  process.exit(0);
+}
 
-  const command = 'activate options radar';
+let currentIndex = 0;
 
-  if (command === lastCommand) return;
-
-  lastCommand = command;
-
-  console.log(`📤 Executing: "${command}"`);
+const runCommand = () => {
+  const cmd = queue[currentIndex];
+  console.log(`📤 Executing: "${cmd}"`);
 
   try {
-    execSync(`node auto-runner.cjs "${command}"`, { stdio: 'inherit' });
+    execSync(`node auto-runner.cjs "${cmd}"`, { stdio: 'inherit' });
   } catch (err) {
     console.error(`❌ Level 2 Loop Error: ${err.message}`);
   }
 
-  lastCommand = '';
-}, 30 * 1000); // 30 seconds default; will dynamically adjust later
+  currentIndex = (currentIndex + 1) % queue.length;
+
+  setTimeout(runCommand, config.loopIntervalSeconds * 1000);
+};
+
+runCommand();
