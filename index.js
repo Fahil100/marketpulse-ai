@@ -1,3 +1,4 @@
+// 🕵️ Insider Tracker added
 // 🐋 Whale Tracker added
 // ✅ Auto-update from GPT Commander at 6/29/2025, 6:14:45 PM
 // GPT-Alpha Omega - Unified Monolithic System (700+ lines)
