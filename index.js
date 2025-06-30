@@ -1,3 +1,4 @@
+// 🚀 Manual deploy command received
 // 📈 Options Radar upgraded
 // 🕵️ Insider Tracker added
 // 🐋 Whale Tracker added
