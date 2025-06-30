@@ -1,7 +1,1 @@
-install institutional flow radar
-inject sentiment analysis engine
-add chart screenshot generator
-enable liquidity scanner
-activate short interest monitor
-add whale tracker
-deploy now
+done
