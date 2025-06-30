@@ -1,3 +1,4 @@
+// 🔻 Short Interest Monitor activated
 // 💰 Dividend Tracker added
 // 🚀 Manual deploy command received
 // 📈 Options Radar upgraded
