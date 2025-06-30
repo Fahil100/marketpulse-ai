@@ -1,3 +1,4 @@
+// 💰 Dividend Tracker added
 // 🚀 Manual deploy command received
 // 📈 Options Radar upgraded
 // 🕵️ Insider Tracker added
