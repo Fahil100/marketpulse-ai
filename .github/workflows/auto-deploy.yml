@@ -1,0 +1,30 @@
+name: Auto Push and Deploy to Render
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Push Code to GitHub
+        run: |
+          git config user.name "GPT-Auto-Deployer"
+          git config user.email "gpt@autobot.com"
+          git add .
+          git commit -m "🔁 Auto-commit via GPT"
+          git push origin main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Deploy to Render
+        run: |
+          curl -X POST https://api.render.com/v1/services/srv-d1dcbbre5dus73b8ghqg/deploys \
+          -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+          -H "Content-Type: application/json" \
+          -d '{}'
