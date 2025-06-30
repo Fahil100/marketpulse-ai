@@ -1,3 +1,52 @@
 {
-  "enableOptionsRadar": true
+  "mode": "live",
+  "loopIntervalSeconds": 30,
+  "logToTelegram": true,
+  "logToGoogleSheets": true,
+  "logToConsole": true,
+  "timeZone": "PST",
+  "goldTrade": {
+    "enabled": true,
+    "breakoutLevel": 3289,
+    "breakdownLevel": 3265,
+    "alertOnEveryMove": false
+  },
+  "toggles": {
+    "optionsRadar": true,
+    "whaleTracker": true,
+    "insiderFlow": true,
+    "institutionalFlowRadar": true,
+    "sentimentEngine": true,
+    "autoTrade": false,
+    "backtesting": true,
+    "chartScreenshot": true,
+    "googleSheets": true,
+    "telegramAlerts": true,
+    "liquidityScanner": true,
+    "shortInterestMonitor": true,
+    "dividendTracker": true,
+    "gptReasoning": true,
+    "alpacaTradeExecution": false,
+    "ipoTracker": true,
+    "cryptoAlerts": true,
+    "oilAlerts": true,
+    "silverAlerts": true,
+    "performanceLogging": true,
+    "multiSignalFilter": true,
+    "marketHoursLimiter": true,
+    "realEstateMode": false
+  },
+  "telegram": {
+    "botToken": "7697144054:AAE-LA8yLnEUUpAVML-8g-mL1NAQBIPKZuU",
+    "chatId": "your_channel_or_chat_id"
+  },
+  "sheets": {
+    "spreadsheetId": "your_google_sheet_id",
+    "sheetName": "GPT-Alpha-Omega"
+  },
+  "alpaca": {
+    "enabled": false,
+    "apiKey": "your_alpaca_api_key",
+    "secretKey": "your_alpaca_secret_key"
+  }
 }

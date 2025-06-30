@@ -1,32 +1,49 @@
-const { execSync } = require("child_process");
-const fs = require("fs");
+// auto-runner.cjs
+const { execSync } = require('child_process');
+const fs = require('fs');
+const path = require('path');
 
-const command = process.argv.slice(2).join(" ");
+// Load config.json
+const configPath = path.join(__dirname, 'config.json');
+let config;
 
-if (!command) {
-  console.error("❌ No command provided to auto-runner.");
+try {
+  config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+} catch (err) {
+  console.error('❌ Failed to read config.json:', err.message);
   process.exit(1);
 }
 
-console.log(`📡 Running command: ${command}`);
+// Grab command from command-line args
+const userCommand = process.argv.slice(2).join(' ').trim();
 
-try {
-  if (command === "activate options radar") {
-    console.log("📈 Activating Options Volume Radar...");
-    require("./optionsRadar.js");
-  } else {
-    console.log(`❌ Unknown command: "${command}"`);
+if (!userCommand) {
+  console.log('⛔ No command provided.');
+  process.exit(0);
+}
+
+console.log(`📡 Running command: ${userCommand}`);
+
+// Handle command routing
+switch (userCommand.toLowerCase()) {
+  case 'activate options radar':
+    if (config.toggles.optionsRadar !== true) {
+      console.log('⛔ optionsRadar toggle is OFF in config.json');
+      process.exit(0);
+    }
+
+    console.log('📈 Activating Options Volume Radar...');
+    execSync('node optionsRadar.cjs', { stdio: 'inherit' });
+
+    // Auto Git commit
+    try {
+      execSync('git add . && git commit -m "🤖 GPT Auto: activate options radar"', { stdio: 'inherit' });
+    } catch (err) {
+      console.warn('⚠️ Git commit skipped:', err.message);
+    }
+    break;
+
+  default:
+    console.log(`❌ Unknown command: "${userCommand}"`);
     process.exit(1);
-  }
-
-  try {
-    execSync("git add .");
-    execSync(`git diff --cached --quiet || git commit -m "🤖 GPT Auto: ${command}"`);
-  } catch (commitErr) {
-    console.warn("⚠️ Nothing to commit. Skipping Git commit.");
-  }
-
-} catch (err) {
-  console.error(`❌ Execution failed: ${err.message}`);
-  process.exit(1);
 }
