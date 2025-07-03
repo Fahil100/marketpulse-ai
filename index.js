@@ -1,1 +1,1 @@
-// GPT Alpha Omega LIVE - System fully operational
+// your updated index.js content goes here
