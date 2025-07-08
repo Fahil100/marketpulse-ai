@@ -1,2 +1,2 @@
-// ? GPT Alpha Omega Retest
-console.log('System Retest OK');
+// ? Live webhook ping from PowerShell
+console.log("Webhook Test")
