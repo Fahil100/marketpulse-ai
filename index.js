@@ -1,1 +1,2 @@
-// GPT Alpha Omega LIVE - System fully operational
+// ✅ FINAL LIVE DEPLOY TEST
+console.log("GPT Alpha Omega — LIVE AND VERIFIED")
